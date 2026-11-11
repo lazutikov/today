@@ -174,7 +174,7 @@ function saveMyPosts(cards: FeedCard[]) {
 }
 
 function FeedApp({ onSignOut }: { onSignOut: () => void }) {
-  const [tab, setTab] = useState<Tab>('people')
+  const [tab, setTab] = useState<Tab>('events')
   // Signed in through the server: own posts and answers are real. Otherwise everything is a local demo.
   const [live] = useState(isLive)
   const [people, setPeople] = useState<FeedCard[]>(() =>
