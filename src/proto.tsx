@@ -48,6 +48,8 @@ type Match = {
   source: 'invite' | 'event' | 'incoming'
   /** Real matches: server request id, link that opens a chat with the person, and their Telegram photo */
   reqId?: string
+  /** The other person cancelled: shown as a grey notice until dismissed */
+  cancelled?: boolean
   contact?: string
   photo?: string
 }
@@ -187,6 +189,24 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     live ? EVENTS : [...loadMyPosts().filter((c) => c.kind === 'event'), ...EVENTS],
   )
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
+  // Cancelled-meeting notices the person already closed
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('today.dismissed') || '[]')
+    } catch {
+      return []
+    }
+  })
+  const dismiss = (id: string) =>
+    setDismissed((d) => {
+      const next = [...d, id].slice(-50)
+      try {
+        localStorage.setItem('today.dismissed', JSON.stringify(next))
+      } catch {
+        /* memory only */
+      }
+      return next
+    })
   const refreshPosts = () => {
     if (!live) return
     fetchPosts(CITY).then(setRealPosts)
@@ -201,6 +221,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         source: m.source,
         contact: m.contact,
         photo: m.photo,
+        cancelled: m.cancelled,
       }))
       // Server is the truth for real meetings; demo matches stay local.
       setMatches((cur) => [...real, ...cur.filter((x) => !x.reqId)])
@@ -470,7 +491,22 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         </button>
       </header>
 
-      {matches.map((m) => (
+      {matches.map((m) =>
+        m.cancelled ? (
+          dismissed.includes(m.id) ? null : (
+            <button
+              key={m.id}
+              className="plan-banner plan-banner-off"
+              aria-label={`${m.with[0].name} скасував(ла) зустріч. Сховати`}
+              onClick={() => dismiss(m.id)}
+            >
+              <span>
+                <b>{m.with[0].name}</b> скасував(ла) зустріч: {m.tag}, {m.time}
+              </span>
+              <span aria-hidden="true">✕</span>
+            </button>
+          )
+        ) : (
         <button key={m.id} className="plan-banner" onClick={() => setOverlay({ t: 'match', match: m })}>
           <span className="plan-banner-dot" aria-hidden="true" />
           <span>
@@ -478,7 +514,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           </span>
           <span aria-hidden="true">→</span>
         </button>
-      ))}
+        ),
+      )}
 
       <ul className="cards" id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {cards.map((card) => (

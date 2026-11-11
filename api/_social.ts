@@ -363,13 +363,18 @@ export function meetingView(r: Req, viewerId: number) {
     post: r.postHeadline,
     source: iAmAuthor ? 'incoming' : r.type === 'join' ? 'event' : 'invite',
     acceptedAt: r.createdAt,
+    /** The other person called it off */
+    cancelled: r.status === 'cancelled',
   }
 }
 
 export async function listMeetings(userId: number) {
   const ids = (await kv('ZRANGE', `matches:${userId}`, 0, -1, 'REV')) as string[]
   const reqs = await Promise.all(ids.map((id) => getReq(id)))
-  return reqs.filter((r): r is Req => Boolean(r && r.status === 'yes')).map((r) => meetingView(r, userId))
+  // Active meetings, plus ones the *other* person cancelled (so this person learns about it in the app).
+  return reqs
+    .filter((r): r is Req => Boolean(r && (r.status === 'yes' || (r.status === 'cancelled' && r.cancelledBy !== userId))))
+    .map((r) => meetingView(r, userId))
 }
 
 /** Cancels a confirmed meeting from either side and tells the other person. */
@@ -381,7 +386,6 @@ export async function cancelMeeting(id: string, userId: number, uncomfortable: b
   r.cancelledBy = userId
   r.reported = uncomfortable
   await putReq(r)
-  for (const uid of [r.from.id, r.to.id]) await kv('ZREM', `matches:${uid}`, r.id)
   if (uncomfortable) await kv('LPUSH', 'reports', JSON.stringify({ req: r.id, by: userId, at: Date.now() }))
 
   const p = await getPost(r.postId)

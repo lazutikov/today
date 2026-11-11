@@ -34,6 +34,7 @@ export type Meeting = {
   time: string
   post: string
   source: 'invite' | 'event' | 'incoming'
+  cancelled: boolean
 }
 
 /** Today's confirmed meetings, wherever "Так" was tapped (app or bot). */

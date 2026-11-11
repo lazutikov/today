@@ -1655,3 +1655,9 @@ html:has(.screen) body {
 .plan-banner + .plan-banner {
   margin-top: 24px;
 }
+
+.plan-banner.plan-banner-off {
+  background: #fff;
+  color: #575757;
+  justify-content: space-between;
+}
