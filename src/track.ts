@@ -86,6 +86,8 @@ export type EventName =
   | 'join_result'
   | 'incoming_view'
   | 'age_hint'
+  | 'notifs_open'
+  | 'notif_tap'
   | 'login_error'
 
 export function track(name: EventName, props: Record<string, unknown> = {}) {

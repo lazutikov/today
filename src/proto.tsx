@@ -9,6 +9,7 @@ import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
 import { guessGender } from './gender'
+import { NotificationsPage } from './notifications'
 import { clearTgUser, inMiniApp, loadSession, loadTgUser, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
 import { identify, resetIdentity, track } from './track'
 import {
@@ -16,6 +17,9 @@ import {
   cancelMeetingApi,
   createPost,
   fetchMeetings,
+  fetchNotifs,
+  markNotifsSeen,
+  type Notif,
   fetchInbox,
   fetchPosts,
   isLive,
@@ -32,6 +36,7 @@ import {
   Sticker,
   type Tab,
   TagPill,
+  BellIcon,
   UserIcon,
   useCountdown,
 } from './ui'
@@ -80,6 +85,7 @@ type Overlay =
   | { t: 'posted'; card: FeedCard }
   | { t: 'incoming'; inc: Incoming }
   | { t: 'reason'; inc: Incoming }
+  | { t: 'notifs' }
   | null
 
 const ANSWER_SECONDS = 5 * 60
@@ -189,6 +195,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     live ? EVENTS : [...loadMyPosts().filter((c) => c.kind === 'event'), ...EVENTS],
   )
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
+  const [notifs, setNotifs] = useState<{ items: Notif[]; seen: number }>({ items: [], seen: 0 })
+  const unread = notifs.items.filter((n) => n.at > notifs.seen).length
   // Cancelled-meeting notices the person already closed
   const [dismissed, setDismissed] = useState<string[]>(() => {
     try {
@@ -210,6 +218,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const refreshPosts = () => {
     if (!live) return
     fetchPosts(CITY).then(setRealPosts)
+    fetchNotifs().then(setNotifs)
     fetchMeetings().then((list) => {
       const real: Match[] = list.map((m) => ({
         id: `m-${m.id}`,
@@ -254,6 +263,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     if (!live) return
     refreshPosts()
     const feed = window.setInterval(refreshPosts, 20000)
+    const bell = window.setInterval(() => fetchNotifs().then(setNotifs), 8000)
     const onVisible = () => document.visibilityState === 'visible' && refreshPosts()
     document.addEventListener('visibilitychange', onVisible)
     const inbox = window.setInterval(async () => {
@@ -282,6 +292,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     }, 5000)
     return () => {
       window.clearInterval(feed)
+      window.clearInterval(bell)
       window.clearInterval(inbox)
       document.removeEventListener('visibilitychange', onVisible)
     }
@@ -468,6 +479,47 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     say('Пост видалено')
   }
 
+  /* ----- notifications ----- */
+  const openNotifs = () => {
+    track('notifs_open', { unread })
+    setOverlay({ t: 'notifs' })
+    if (unread > 0) {
+      markNotifsSeen()
+      // Keep the "Нові" group visible while the page is open; next visit they move to "Раніше".
+      later(60000, () => setNotifs((n) => ({ ...n, seen: Date.now() })))
+    }
+  }
+
+  const openNotif = (n: Notif) => {
+    track('notif_tap', { type: n.type })
+    const card = [...realPosts, ...people, ...events].find((c) => c.id === n.postId)
+    if (n.type === 'request') {
+      if ((n.expiresAt ?? 0) <= Date.now()) return say('Час на відповідь уже вийшов')
+      seenInbox.current.add(n.reqId)
+      return setOverlay({
+        t: 'incoming',
+        inc: {
+          from: { name: '', age: 0 },
+          tag: n.tag,
+          place: n.place,
+          time: n.time,
+          note: n.who || 'Без опису',
+          kind: n.kind ?? 'invite',
+          post: n.post,
+          reqId: n.reqId,
+          expiresAt: n.expiresAt,
+        },
+      })
+    }
+    if (n.type === 'match') {
+      const m = matches.find((x) => x.reqId === n.reqId)
+      if (m && !m.cancelled) return setOverlay({ t: 'match', match: m })
+      return say('Цю зустріч уже скасовано')
+    }
+    if (card) return setOverlay({ t: 'detail', card })
+    say('Цей план уже неактуальний')
+  }
+
   const switchTab = (next: Tab) => {
     if (next === tab) return
     track('tab_switch', { to: next })
@@ -485,13 +537,25 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <div className="wordmark">
           today <span className="proto-tag">{live ? 'наживо' : 'демо'}, {CITY_NAME}</span>
         </div>
-        <button
-          className="profile-btn"
-          aria-label="Профіль"
-          onClick={() => setOverlay({ t: 'profile' })}
-        >
-          <UserIcon />
-        </button>
+        <div className="head-actions">
+          {live && (
+            <button
+              className="profile-btn bell-btn"
+              aria-label={unread ? `Сповіщення, нових: ${unread}` : 'Сповіщення'}
+              onClick={openNotifs}
+            >
+              <BellIcon />
+              {unread > 0 && <span className="bell-badge">{unread > 9 ? '9+' : unread}</span>}
+            </button>
+          )}
+          <button
+            className="profile-btn"
+            aria-label="Профіль"
+            onClick={() => setOverlay({ t: 'profile' })}
+          >
+            <UserIcon />
+          </button>
+        </div>
       </header>
 
       {matches.map((m) =>
@@ -543,6 +607,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
       <Dock tab={tab} onTab={switchTab} onCreate={() => setOverlay({ t: 'create' })} />
 
+      {overlay?.t === 'notifs' && (
+        <NotificationsPage
+          items={notifs.items}
+          seen={notifs.seen}
+          onBack={() => setOverlay(null)}
+          onOpen={openNotif}
+        />
+      )}
       {overlay?.t === 'detail' && (
         <DetailSheet
           card={[...realPosts, ...people, ...events].find((c) => c.id === overlay.card.id) ?? overlay.card}

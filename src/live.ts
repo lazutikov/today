@@ -47,6 +47,30 @@ export async function cancelMeetingApi(id: string, uncomfortable: boolean) {
   await api('/api/requests', { method: 'POST', body: JSON.stringify({ id, cancel: true, uncomfortable }) })
 }
 
+export type Notif = {
+  id: string
+  type: 'request' | 'match' | 'declined' | 'expired' | 'cancelled'
+  at: number
+  reqId: string
+  postId: string
+  post: string
+  tag: string
+  place: string
+  time: string
+  who: string
+  kind?: 'invite' | 'join'
+  expiresAt?: number
+}
+
+export async function fetchNotifs(): Promise<{ items: Notif[]; seen: number }> {
+  const r = await api<{ ok: boolean; items?: Notif[]; seen?: number }>('/api/requests?notifications=1')
+  return r.ok ? { items: r.items ?? [], seen: r.seen ?? 0 } : { items: [], seen: 0 }
+}
+
+export async function markNotifsSeen() {
+  await api('/api/requests', { method: 'POST', body: JSON.stringify({ seen: true }) })
+}
+
 export async function fetchPosts(city: string): Promise<FeedCard[]> {
   const r = await api<{ ok: boolean; posts?: FeedCard[] }>(`/api/posts?city=${city}`)
   return r.ok && r.posts ? r.posts : []

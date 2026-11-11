@@ -5,6 +5,8 @@
  *  GET  /api/requests?inbox=1                                         pending ones sent to you
  *  GET  /api/requests?meetings=1                                      today's confirmed meetings
  *  POST /api/requests {id, cancel: true, uncomfortable?}              cancel a confirmed meeting
+ *  GET  /api/requests?notifications=1                                 notification feed + last-seen time
+ *  POST /api/requests {seen: true}                                    mark notifications read
  */
 import { json, kv, readJson, readSession } from './_kv.js'
 import {
@@ -15,6 +17,8 @@ import {
   getReq,
   inboxView,
   listMeetings,
+  listNotifs,
+  markNotifsSeen,
   matchViewForAuthor,
   reqStatusView,
   settleExpiry,
@@ -25,6 +29,11 @@ export async function POST(request: Request): Promise<Response> {
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
   const body = await readJson<Record<string, unknown>>(request)
   if (!body) return json({ ok: false, error: 'bad_json' }, 400)
+
+  if (body.seen) {
+    await markNotifsSeen(user.id)
+    return json({ ok: true })
+  }
 
   if (typeof body.id === 'string' && body.cancel) {
     const res = await cancelMeeting(body.id, user.id, Boolean(body.uncomfortable))
@@ -53,6 +62,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
   const params = new URL(request.url).searchParams
 
+  if (params.get('notifications')) return json({ ok: true, ...(await listNotifs(user.id)) })
   if (params.get('meetings')) return json({ ok: true, meetings: await listMeetings(user.id) })
 
   if (params.get('inbox')) {

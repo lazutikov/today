@@ -1661,3 +1661,167 @@ html:has(.screen) body {
   color: #575757;
   justify-content: space-between;
 }
+
+/* ---------- Notifications ---------- */
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bell-btn {
+  position: relative;
+}
+
+.bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--f-accent);
+  color: var(--f-on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--f-bg, #ebebeb);
+}
+
+.npage {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow-y: auto;
+  background: var(--f-bg, #ebebeb);
+  padding: 0 0 40px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .npage {
+    animation: npage-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@keyframes npage-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.npage-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 13px 12px;
+  background: var(--f-bg, #ebebeb);
+}
+
+.npage-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.npage-spacer {
+  width: 44px;
+}
+
+.npage-group {
+  margin: 20px 20px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #575757;
+}
+
+.nlist {
+  list-style: none;
+  margin: 0;
+  padding: 0 6.5px;
+  display: grid;
+  gap: 8px;
+}
+
+.ncard {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 16px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--f-card, #fff);
+  color: var(--f-text, #000);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ncard.unread {
+  box-shadow: inset 0 0 0 2px var(--f-accent);
+}
+
+.ncard-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 22px;
+}
+
+.ncard-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ncard-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ncard-post {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.ncard-who,
+.ncard-meta {
+  font-size: 13px;
+  color: #575757;
+}
+
+.ncard-cta {
+  justify-self: start;
+  margin-top: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--f-accent);
+  color: var(--f-on-accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ncard-time {
+  font-size: 12px;
+  color: #a7a7a7;
+  white-space: nowrap;
+}
+
+.npage-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 80px 32px;
+  text-align: center;
+  color: #575757;
+}

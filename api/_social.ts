@@ -137,6 +137,44 @@ export async function listPosts(city: string): Promise<Post[]> {
   return raws.filter((r): r is string => Boolean(r)).map((r) => JSON.parse(r) as Post)
 }
 
+/* ---------- Notifications: everything the bot says, also kept for the app ---------- */
+
+export type Notif = {
+  id: string
+  type: 'request' | 'match' | 'declined' | 'expired' | 'cancelled'
+  at: number
+  reqId: string
+  postId: string
+  post: string
+  tag: string
+  place: string
+  time: string
+  /** The other person: hidden identity before a match, name after */
+  who: string
+  /** For requests: what kind (invite to my free time / join my plan) */
+  kind?: 'invite' | 'join'
+  expiresAt?: number
+}
+
+export async function notify(userId: number, n: Omit<Notif, 'id' | 'at'>) {
+  const item: Notif = { ...n, id: `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: Date.now() }
+  await kv('LPUSH', `notif:${userId}`, JSON.stringify(item))
+  await kv('LTRIM', `notif:${userId}`, 0, 99)
+  await kv('EXPIRE', `notif:${userId}`, 2 * 86400)
+}
+
+export async function listNotifs(userId: number) {
+  const raws = (await kv('LRANGE', `notif:${userId}`, 0, 99)) as string[]
+  const seen = Number((await kv('GET', `notifseen:${userId}`)) || 0)
+  return { items: raws.map((r) => JSON.parse(r) as Notif), seen }
+}
+
+export async function markNotifsSeen(userId: number) {
+  await kv('SET', `notifseen:${userId}`, Date.now(), 'EX', 7 * 86400)
+}
+
+const base = (r: Req) => ({ reqId: r.id, postId: r.postId, post: r.postHeadline, tag: r.tag, place: r.place, time: r.time })
+
 /* ---------- Requests ---------- */
 
 export async function getReq(id: string): Promise<Req | null> {
@@ -146,6 +184,11 @@ export async function getReq(id: string): Promise<Req | null> {
 
 async function putReq(r: Req) {
   await kv('SET', `req:${r.id}`, JSON.stringify(r), 'EX', 86400)
+}
+
+function plainWho(r: Req) {
+  const parts = [r.from.gender, r.from.age ? String(r.from.age) : ''].filter(Boolean).join(', ')
+  return `${parts || 'Стать не вказана'}${r.from.bio ? `: «${r.from.bio}»` : ''}`
 }
 
 function who(r: Req) {
@@ -210,6 +253,7 @@ export async function createReq(
   })
   if (sent.ok) r.authorMsgId = (sent.result as { message_id: number }).message_id
   await putReq(r)
+  await notify(post.authorId, { ...base(r), type: 'request', who: plainWho(r), kind: r.type, expiresAt: r.expiresAt })
   await kv('ZADD', `inbox:${post.authorId}`, r.expiresAt, r.id)
   await kv('EXPIRE', `inbox:${post.authorId}`, 86400)
   return { ok: true, req: r }
@@ -220,6 +264,7 @@ export async function settleExpiry(r: Req): Promise<Req> {
   if (r.status !== 'pending' || Date.now() < r.expiresAt) return r
   r.status = 'expired'
   await putReq(r)
+  await notify(r.from.id, { ...base(r), type: 'expired', who: '' })
   await kv('ZREM', `inbox:${r.to.id}`, r.id)
   await kv('DEL', `outgoing:${r.from.id}`)
   if (r.authorMsgId)
@@ -263,6 +308,13 @@ export async function answerReq(
       else p.matched = true
       await kv('SET', `post:${p.id}`, JSON.stringify(p), 'KEEPTTL')
     }
+  }
+
+  if (yes) {
+    await notify(r.from.id, { ...base(r), type: 'match', who: r.to.first_name })
+    await notify(r.to.id, { ...base(r), type: 'match', who: r.from.first_name })
+  } else {
+    await notify(r.from.id, { ...base(r), type: 'declined', who: '' })
   }
 
   const where = `📍 ${esc(r.place)} · 🕐 ${esc(r.time)}`
@@ -397,6 +449,7 @@ export async function cancelMeeting(id: string, userId: number, uncomfortable: b
 
   const me = r.from.id === userId ? r.from : r.to
   const other = r.from.id === userId ? r.to : r.from
+  await notify(other.id, { ...base(r), type: 'cancelled', who: me.first_name })
   await tg('sendMessage', {
     chat_id: other.id,
     text: `${me.first_name} скасував(ла) зустріч «${r.postHeadline}» (${r.place}, ${r.time}). Шкода. У стрічці є ще люди, вільні сьогодні.`,
