@@ -196,6 +196,7 @@ export function DarkSheet({
   title,
   heading,
   tone,
+  full,
   onClose,
   children,
 }: {
@@ -203,6 +204,8 @@ export function DarkSheet({
   /** Replaces the plain title visually (e.g. a sticker); `title` still names the dialog */
   heading?: ReactNode
   tone?: 'dark'
+  /** Full-screen page instead of a bottom sheet (long forms) */
+  full?: boolean
   onClose?: () => void
   children: ReactNode
 }) {
@@ -216,7 +219,7 @@ export function DarkSheet({
   return (
     <div className="dscrim" onClick={onClose}>
       <div
-        className={tone === 'dark' ? 'dsheet dsheet-dark' : 'dsheet'}
+        className={['dsheet', tone === 'dark' && 'dsheet-dark', full && 'dsheet-full'].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-label={title}

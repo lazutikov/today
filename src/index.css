@@ -2166,3 +2166,49 @@ html:has(.screen) body {
 .picker .leaflet-tile-pane {
   filter: saturate(0.55) brightness(1.04) contrast(0.95);
 }
+
+/* Full-screen form (new post): title stays on top, "Опублікувати" stays at the bottom */
+.dsheet.dsheet-full {
+  height: 100dvh;
+  max-height: none;
+  border-radius: 0;
+  padding-top: calc(12px + env(safe-area-inset-top));
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  animation: rise-full 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rise-full {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+.dsheet-full .dsheet-head {
+  position: sticky;
+  top: calc(-12px - env(safe-area-inset-top));
+  z-index: 1;
+  margin: 0 -20px 8px;
+  padding: 8px 20px;
+  background: #fff;
+}
+
+.dsheet-full .dsheet-foot {
+  position: sticky;
+  bottom: 0;
+  margin: auto -20px 0;
+  padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 24px);
+}
+
+.dsheet-foot .derror {
+  margin-bottom: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsheet.dsheet-full {
+    animation: none;
+  }
+}

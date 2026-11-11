@@ -1385,7 +1385,7 @@ function CreateSheet({
   }
 
   return (
-    <DarkSheet title="Новий пост" onClose={onClose}>
+    <DarkSheet title="Новий пост" full onClose={onClose}>
       <div className="dseg" role="tablist" aria-label="Тип поста">
         <button
           role="tab"
@@ -1534,14 +1534,16 @@ function CreateSheet({
         </>
       )}
 
-      {error && (
-        <p className="derror" role="alert">
-          {error}
-        </p>
-      )}
-      <button className="dbtn" onClick={submit}>
-        Опублікувати
-      </button>
+      <div className="dsheet-foot">
+        {error && (
+          <p className="derror" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="dbtn" onClick={submit}>
+          Опублікувати
+        </button>
+      </div>
     </DarkSheet>
   )
 }
