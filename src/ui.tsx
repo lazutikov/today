@@ -143,18 +143,15 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
       {onOpen && <button className="fcard-hit" onClick={onOpen} aria-label={card.headline} />}
       {card.mine && <span className="fcard-badge">{card.matched ? 'Твій пост · є матч' : 'Твій пост'}</span>}
       <h2 className="fcard-title">{card.headline}</h2>
-      {card.bio && (
-        <div className="fcard-about">
-          <p className="fcard-quote">«{card.bio}»</p>
-        </div>
-      )}
       <div className="fcard-meta">
-        {who && (
-          <p className="fcard-row">
-            <UserIcon />
-            <b>{who}</b>
-          </p>
-        )}
+        {/* Who, like the place: bold line, the person's «про себе» under it */}
+        <div className="fcard-row">
+          <UserIcon />
+          <div>
+            <p className="fcard-venue">{who}</p>
+            {card.bio && <p className="fcard-addr">{card.bio}</p>}
+          </div>
+        </div>
         <p className="fcard-row">
           <ClockIcon />
           <b>{card.time}</b>
