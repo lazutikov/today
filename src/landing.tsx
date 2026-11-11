@@ -226,8 +226,8 @@ export function Onboarding({
         <Sticker
           as="h1"
           lines={[
-            { text: 'ще один', tag: 'Прогулянка' },
-            { text: 'крок', tag: 'Спорт' },
+            { text: 'пару слів', tag: 'Прогулянка' },
+            { text: 'про тебе', tag: 'Спорт' },
           ]}
         />
         <p className="landing-lead">

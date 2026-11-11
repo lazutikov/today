@@ -118,7 +118,9 @@ export default function Proto() {
         resetIdentity()
         clearTgUser()
         setSignedIn(false)
-        setStage('landing')
+        // On the real site go back to the landing page; inside Telegram or the preview, to the start screen.
+        if (import.meta.env.VITE_TG_BOT_ID && !inMiniApp) location.href = `./${location.hash}`
+        else setStage('landing')
       }}
     />
   )
