@@ -664,13 +664,22 @@ function DetailSheet({
       ) : (
         <>
           <button className="dbtn" onClick={onJoin} disabled={left <= 0}>
-            {left > 0 ? `Я з вами · ще ${left} ${left === 1 ? 'місце' : 'місця'}` : 'Місць немає'}
+            {left > 0 ? `Я з вами · ще ${left} ${placesWord(left)}` : 'Місць немає'}
           </button>
           <p className="dhint">Організатор підтвердить запит, і відкриється чат.</p>
         </>
       )}
     </DarkSheet>
   )
+}
+
+/** 1 місце, 2–4 місця, 5+ місць */
+function placesWord(n: number) {
+  const d = n % 10
+  const t = n % 100
+  if (d === 1 && t !== 11) return 'місце'
+  if (d >= 2 && d <= 4 && (t < 12 || t > 14)) return 'місця'
+  return 'місць'
 }
 
 function slotsFor(time: string): string[] {
@@ -1005,6 +1014,8 @@ function CreateSheet({
   const [at, setAt] = useState('20:00')
   const [areas, setAreas] = useState<string[]>(profile.areas ?? [])
   const [venue, setVenue] = useState('')
+  /** How many people the author is looking for (not counting themselves) */
+  const [seats, setSeats] = useState(1)
   const [tags, setTags] = useState<string[]>([])
   /** Tags added from the text, not by hand */
   const [auto, setAuto] = useState<string[]>([])
@@ -1071,7 +1082,7 @@ function CreateSheet({
       age: profile.age ?? 0,
       gender: profile.gender,
       taken: kind === 'event' ? 1 : undefined,
-      capacity: kind === 'event' ? 4 : undefined,
+      capacity: kind === 'event' ? seats + 1 : undefined,
       mine: true,
     })
   }
@@ -1196,6 +1207,20 @@ function CreateSheet({
               setError(null)
             }}
           />
+          <p className="dlabel">Скільки людей шукаєш</p>
+          <div className="dchips" role="radiogroup" aria-label="Скільки людей шукаєш">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <button
+                key={n}
+                role="radio"
+                aria-checked={seats === n}
+                className={seats === n ? 'dchip on' : 'dchip'}
+                onClick={() => setSeats(n)}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
         </>
       )}
 

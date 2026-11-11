@@ -66,7 +66,8 @@ export function cleanPost(input: Record<string, unknown>, user: SessionUser): Po
     tags,
     age: Number.isFinite(age) && age > 0 && age < 100 ? Math.round(age) : 0,
     gender,
-    capacity: kind === 'event' ? 4 : undefined,
+    // Author + 1..6 people they are looking for
+    capacity: kind === 'event' ? Math.min(7, Math.max(2, Math.round(Number(input.capacity)) || 2)) : undefined,
     taken: kind === 'event' ? 1 : undefined,
     city: input.city === 'warsaw' ? 'warsaw' : 'lviv',
     authorId: user.id,
@@ -162,7 +163,7 @@ export async function createReq(
 ): Promise<{ ok: true; req: Req } | { ok: false; error: string }> {
   if (post.authorId === user.id) return { ok: false, error: 'own_post' }
   if (post.matched) return { ok: false, error: 'taken' }
-  if (post.kind === 'event' && (post.taken ?? 0) >= (post.capacity ?? 4)) return { ok: false, error: 'full' }
+  if (post.kind === 'event' && (post.taken ?? 0) >= (post.capacity ?? 2)) return { ok: false, error: 'full' }
   const busy = await kv('SET', `outgoing:${user.id}`, 'x', 'EX', ANSWER_SECONDS, 'NX')
   if (busy === null) return { ok: false, error: 'busy' }
 
