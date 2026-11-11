@@ -957,7 +957,7 @@ function DetailSheet({
   return (
     <DarkSheet title={card.kind === 'person' ? 'Покличте мене' : 'Кличу з собою'} onClose={onClose}>
       <div className="dsheet-card">
-        <CardView card={card} from={from} />
+        <CardView card={card} from={from} showTags />
       </div>
       {card.lat !== undefined && card.lon !== undefined && (
         <a className="route-link" href={mapsLink({ lat: card.lat, lon: card.lon })} target="_blank" rel="noopener">

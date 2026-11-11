@@ -148,11 +148,14 @@ export function CardView({
   card,
   onOpen,
   from,
+  showTags,
 }: {
   card: FeedCard
   onOpen?: () => void
-  /** My position (stays on the phone): adds "1,2 км" to the place */
+  /** My position (stays on the phone): adds the time to get there */
   from?: Coords | null
+  /** Categories take space in the feed; shown only in the card's details */
+  showTags?: boolean
 }) {
   const who = whoLine(card)
   return (
@@ -187,11 +190,13 @@ export function CardView({
           </div>
         </div>
       </div>
-      <p className="fcard-pills">
-        {card.tags.map((t) => (
-          <TagPill key={t} tag={t} />
-        ))}
-      </p>
+      {showTags && (
+        <p className="fcard-pills">
+          {card.tags.map((t) => (
+            <TagPill key={t} tag={t} />
+          ))}
+        </p>
+      )}
     </article>
   )
 }
