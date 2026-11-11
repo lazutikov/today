@@ -1410,9 +1410,9 @@ function CreateSheet({
       </label>
       <textarea
         id="c-headline"
-        className="dinput"
-        rows={2}
-        maxLength={120}
+        className="dinput dtextarea"
+        rows={5}
+        maxLength={160}
         placeholder={
           kind === 'person'
             ? 'Вільний вечір. Хочу на каву або пройтись'
@@ -1425,6 +1425,7 @@ function CreateSheet({
           applyText(e.target.value)
         }}
       />
+      <p className="dhint dhint-left dcount">{headline.length}/160</p>
 
       <p className="dlabel">
         {kind === 'person' ? 'Категорії' : 'Категорія'}{' '}

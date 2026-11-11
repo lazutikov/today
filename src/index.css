@@ -2212,3 +2212,14 @@ html:has(.screen) body {
     animation: none;
   }
 }
+
+/* The plan text is the main thing in the post: give it room */
+.dinput.dtextarea {
+  min-height: 140px;
+  line-height: 1.45;
+}
+
+.dcount {
+  text-align: right;
+  margin-top: 4px;
+}
