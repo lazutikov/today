@@ -14,6 +14,7 @@ import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from 
 import { guessGender } from './gender'
 import { NotificationsPage } from './notifications'
 import { rankFeed } from './rank'
+import { filterByQuery } from './search'
 import { useMyLocation, type Coords } from './location'
 import { getSpot, isHomeCity, setSpot, useSpot } from './area'
 
@@ -49,6 +50,7 @@ import {
   type Tab,
   TagPill,
   BellIcon,
+  SearchIcon,
   ClockIcon,
   shortAddress,
   PinIcon,
@@ -674,6 +676,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     setTab(next)
   }
 
+  const [query, setQuery] = useState('')
   // Demo cards live in the launch city only; elsewhere the feed is just real people
   const local = (l: FeedCard[]) => (home ? l : l.filter((c) => c.mine))
   const cards = rankFeed(
@@ -684,6 +687,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     new Date(),
     from,
   )
+  const shown = filterByQuery(cards, query)
+  // What people look for (length and result count only, not the words)
+  useEffect(() => {
+    if (!query.trim()) return
+    const t = window.setTimeout(() => track('feed_search', { len: query.trim().length, results: shown.length, tab }), 1200)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   return (
     <div className="screen">
@@ -784,8 +795,25 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         </div>
       )}
 
+      <div className="feed-search" role="search">
+        <SearchIcon />
+        <input
+          type="search"
+          placeholder={tab === 'events' ? 'Кава, більярд, Сихів…' : 'Прогулянка, кіно, Центр…'}
+          aria-label="Пошук у стрічці"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          enterKeyHint="search"
+        />
+        {query && (
+          <button className="feed-search-x" aria-label="Очистити пошук" onClick={() => setQuery('')}>
+            ✕
+          </button>
+        )}
+      </div>
+
       <ul className="cards" id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-        {cards.map((card) => (
+        {shown.map((card) => (
           <li key={card.id}>
             <CardView
               card={card}
@@ -797,6 +825,19 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             />
           </li>
         ))}
+        {query.trim() && shown.length === 0 && cards.length > 0 && (
+          <li className="search-empty">
+            <p>
+              За «{query.trim()}» нічого {tab === 'events' ? 'серед планів' : 'серед людей'}.
+            </p>
+            <button className="dbtn" onClick={() => setOverlay({ t: 'create' })}>
+              {tab === 'events' ? 'Створити такий план' : 'Написати, що хочу'}
+            </button>
+            <button className="dlink" onClick={() => setQuery('')}>
+              Показати все
+            </button>
+          </li>
+        )}
         {cards.length === 0 && (
         <li>
           <FeedEnd

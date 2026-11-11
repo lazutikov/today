@@ -80,6 +80,15 @@ export function PlusIcon() {
   )
 }
 
+export function SearchIcon() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  )
+}
+
 export function CloseIcon() {
   return (
     <svg

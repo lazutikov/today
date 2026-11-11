@@ -91,6 +91,7 @@ export type EventName =
   | 'deep_link'
   | 'spot_auto'
   | 'spot_pick'
+  | 'feed_search'
   | 'notif_tap'
   | 'login_error'
 
