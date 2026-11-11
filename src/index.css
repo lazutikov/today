@@ -2328,8 +2328,3 @@ html:has(.screen) body {
   color: var(--f-text, #000);
 }
 
-.fcard .fcard-person {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--f-line, #ebebeb);
-}

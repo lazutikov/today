@@ -162,20 +162,19 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
             <span>{card.place}</span>
           </p>
         )}
+        <div className="fcard-row">
+          <UserIcon />
+          <div>
+            <p className="fcard-venue">{who}</p>
+            {card.bio && <p className="fcard-addr">{card.bio}</p>}
+          </div>
+        </div>
       </div>
       <p className="fcard-pills">
         {card.tags.map((t) => (
           <TagPill key={t} tag={t} />
         ))}
       </p>
-      {/* Who, like the place: bold line, the person's «про себе» under it. Last on the card. */}
-      <div className="fcard-row fcard-person">
-        <UserIcon />
-        <div>
-          <p className="fcard-venue">{who}</p>
-          {card.bio && <p className="fcard-addr">{card.bio}</p>}
-        </div>
-      </div>
     </article>
   )
 }
