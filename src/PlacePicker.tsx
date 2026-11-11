@@ -113,17 +113,35 @@ export default function PlacePicker({
     map.current?.flyTo([p.lat, p.lon], 17, { duration: 0.6 })
   }
 
+  const [locating, setLocating] = useState(false)
   const locateMe = () => {
-    const fail = () => setNote('Не вдалося визначити, де ти. Знайди місце через пошук або посунь карту.')
-    if (!navigator.geolocation) return fail()
+    const geo = navigator.geolocation
+    const fail = (msg = 'Не вдалося визначити, де ти. Знайди місце через пошук або посунь карту.') => {
+      setLocating(false)
+      setNote(msg)
+    }
+    if (!geo || !window.isSecureContext) return fail()
+    setLocating(true)
     setNote('Шукаю, де ти…')
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setNote(null)
-        map.current?.flyTo([pos.coords.latitude, pos.coords.longitude], 17, { duration: 0.6 })
+    const go = (pos: GeolocationPosition) => {
+      setLocating(false)
+      setNote(null)
+      map.current?.flyTo([pos.coords.latitude, pos.coords.longitude], 17, { duration: 0.6 })
+    }
+    const denied = () =>
+      fail('Доступ до геолокації вимкнено. Дозволь його: 🔒 біля адреси сайту → Дозволи → Місцезнаходження.')
+    // Fast network-based position first (enough for the district), GPS only if that fails
+    geo.getCurrentPosition(
+      go,
+      (e) => {
+        if (e.code === e.PERMISSION_DENIED) return denied()
+        geo.getCurrentPosition(go, (e2) => (e2.code === e2.PERMISSION_DENIED ? denied() : fail()), {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        })
       },
-      fail,
-      { enableHighAccuracy: true, timeout: 8000 },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 },
     )
   }
 
@@ -178,8 +196,8 @@ export default function PlacePicker({
 
       {!mapError && (
         <div className="picker-sheet">
-          <button className="picker-locate" onClick={locateMe}>
-            Де я зараз
+          <button className="picker-locate" onClick={locateMe} disabled={locating} aria-busy={locating}>
+            {locating ? 'Шукаю…' : 'Де я зараз'}
           </button>
           <div className="picker-place" aria-live="polite">
             <b>{resolving ? 'Шукаю, що тут…' : (place?.name ?? 'Посунь карту до місця')}</b>
