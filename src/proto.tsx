@@ -43,8 +43,9 @@ type Match = {
   place: string
   time: string
   source: 'invite' | 'event' | 'incoming'
-  /** Real matches: link that opens a chat with the person */
+  /** Real matches: link that opens a chat with the person, and their Telegram photo */
   contact?: string
+  photo?: string
 }
 
 type Incoming = {
@@ -245,10 +246,11 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         full: 'Місць уже немає',
         own_post: 'Це твій пост',
         post_gone: 'Цей план уже неактуальний',
+        taken: 'Ця людина вже знайшла компанію на сьогодні',
       }
       setOverlay(null)
       say(msg[res.error] ?? 'Не вийшло надіслати, спробуй ще раз')
-      if (res.error === 'post_gone') refreshPosts()
+      if (res.error === 'post_gone' || res.error === 'taken') refreshPosts()
       return
     }
     const id = res.request.id
@@ -266,6 +268,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           time: st.match.time,
           source: card.kind === 'event' ? 'event' : 'invite',
           contact: st.match.contact,
+          photo: st.match.photo,
         })
       } else {
         setOverlay({ t: 'declined', card })
@@ -585,6 +588,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
                 time: inc.time,
                 source: 'incoming',
                 contact: r.match.contact,
+                photo: r.match.photo,
               })
             }
             addMatch({
@@ -792,10 +796,11 @@ function WaitingSheet({ title, text }: { title: string; text: string }) {
   )
 }
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, photo }: { name: string; photo?: string }) {
+  const [failed, setFailed] = useState(false)
   return (
     <span className="avatar" aria-hidden="true">
-      {name[0]}
+      {photo && !failed ? <img src={photo} alt="" onError={() => setFailed(true)} /> : name[0]}
     </span>
   )
 }
@@ -833,7 +838,7 @@ function MatchSheet({
       }
     >
       <div className="match-who">
-        <Avatar name={p.name} />
+        <Avatar name={p.name} photo={match.photo} />
         <div>
           <p className="match-name">
             {p.name}, {p.age}

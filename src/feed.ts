@@ -25,6 +25,8 @@ export type FeedCard = {
   mine?: boolean
   /** Posted by a real person through the server (answers are real too) */
   real?: boolean
+  /** Real free-time post that already has a match (author's view) */
+  matched?: boolean
 }
 
 export type City = 'warsaw' | 'lviv'

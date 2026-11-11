@@ -103,7 +103,7 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
   return (
     <article className={card.mine ? 'fcard mine' : 'fcard'}>
       {onOpen && <button className="fcard-hit" onClick={onOpen} aria-label={card.headline} />}
-      {card.mine && <span className="fcard-badge">Твій пост</span>}
+      {card.mine && <span className="fcard-badge">{card.matched ? 'Твій пост · є матч' : 'Твій пост'}</span>}
       <h2 className="fcard-title">{card.headline}</h2>
       {(card.bio || who) && (
         <div className="fcard-about">

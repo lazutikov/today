@@ -11,7 +11,8 @@ export async function GET(request: Request): Promise<Response> {
   const user = readSession(request)
   const city = new URL(request.url).searchParams.get('city') === 'warsaw' ? 'warsaw' : 'lviv'
   const posts = await listPosts(city)
-  return json({ ok: true, posts: posts.map((p) => publicCard(p, user?.id ?? null)) })
+  const visible = posts.filter((p) => !(p.kind === 'person' && p.matched && p.authorId !== user?.id))
+  return json({ ok: true, posts: visible.map((p) => publicCard(p, user?.id ?? null)) })
 }
 
 export async function POST(request: Request): Promise<Response> {

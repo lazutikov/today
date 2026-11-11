@@ -1640,3 +1640,13 @@ html:has(.screen) body {
   color: #575757;
   font-size: 15px;
 }
+
+.avatar {
+  overflow: hidden;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

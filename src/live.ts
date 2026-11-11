@@ -38,7 +38,15 @@ export type ReqStatus = {
   id: string
   status: 'pending' | 'yes' | 'no' | 'expired'
   expiresAt: number
-  match: { name: string; username: string | null; contact: string; place: string; time: string; tag: string } | null
+  match: {
+    name: string
+    username: string | null
+    contact: string
+    photo?: string
+    place: string
+    time: string
+    tag: string
+  } | null
 }
 
 export async function sendRequest(

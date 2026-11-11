@@ -119,3 +119,17 @@ export async function readJson<T>(request: Request): Promise<T | null> {
     return null
   }
 }
+
+/* ---------- Profile photos: only for the two people in a match ---------- */
+
+export function signPhoto(userId: number, viewerId: number): string {
+  const exp = Math.floor(Date.now() / 1000) + 86400
+  const sig = createHmac('sha256', sessionKey()).update(`photo:${userId}:${viewerId}:${exp}`).digest('base64url').slice(0, 32)
+  return `/api/photo?u=${userId}&v=${viewerId}&e=${exp}&s=${sig}`
+}
+
+export function checkPhoto(u: string, v: string, e: string, s: string): boolean {
+  if (Number(e) < Date.now() / 1000) return false
+  const sig = createHmac('sha256', sessionKey()).update(`photo:${u}:${v}:${e}`).digest('base64url').slice(0, 32)
+  return sig.length === s.length && timingSafeEqual(Buffer.from(sig), Buffer.from(s))
+}

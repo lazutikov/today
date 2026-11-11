@@ -2,7 +2,7 @@
  * Real posts and requests (invites to people, joins to events), shared by
  * /api/posts, /api/requests and the bot webhook.
  */
-import { contactUrl, esc, kv, kyivDay, mention, secondsToKyivMidnight, tg, type SessionUser } from './_kv.js'
+import { contactUrl, esc, kv, kyivDay, mention, secondsToKyivMidnight, signPhoto, tg, type SessionUser } from './_kv.js'
 
 export const ANSWER_SECONDS = 5 * 60
 const TAGS = ['Кава', 'Бар/Ресторан', 'Прогулянка', 'Кіно', 'Спорт', 'Ігри', 'Культура']
@@ -25,6 +25,8 @@ export type Post = {
   authorName: string
   authorUsername: string | null
   createdAt: number
+  /** A free-time post closes after its first match */
+  matched?: boolean
 }
 
 export type Req = {
@@ -91,6 +93,7 @@ export function publicCard(p: Post, viewerId: number | null) {
     taken: p.taken,
     capacity: p.capacity,
     mine: viewerId === p.authorId,
+    matched: Boolean(p.matched),
     real: true,
   }
 }
@@ -158,6 +161,7 @@ export async function createReq(
   input: { place?: string; time?: string; gender?: string; age?: number; bio?: string },
 ): Promise<{ ok: true; req: Req } | { ok: false; error: string }> {
   if (post.authorId === user.id) return { ok: false, error: 'own_post' }
+  if (post.matched) return { ok: false, error: 'taken' }
   if (post.kind === 'event' && (post.taken ?? 0) >= (post.capacity ?? 4)) return { ok: false, error: 'full' }
   const busy = await kv('SET', `outgoing:${user.id}`, 'x', 'EX', ANSWER_SECONDS, 'NX')
   if (busy === null) return { ok: false, error: 'busy' }
@@ -239,10 +243,11 @@ export async function answerReq(
   await kv('ZREM', `inbox:${r.to.id}`, r.id)
   await kv('DEL', `outgoing:${r.from.id}`)
 
-  if (yes && r.type === 'join') {
+  if (yes) {
     const p = await getPost(r.postId)
     if (p) {
-      p.taken = (p.taken ?? 1) + 1
+      if (r.type === 'join') p.taken = (p.taken ?? 1) + 1
+      else p.matched = true
       await kv('SET', `post:${p.id}`, JSON.stringify(p), 'KEEPTTL')
     }
   }
@@ -288,7 +293,15 @@ export function reqStatusView(r: Req) {
     expiresAt: r.expiresAt,
     match:
       r.status === 'yes'
-        ? { name: r.to.first_name, username: r.to.username, contact: contactUrl(r.to), place: r.place, time: r.time, tag: r.tag }
+        ? {
+            name: r.to.first_name,
+            username: r.to.username,
+            contact: contactUrl(r.to),
+            photo: signPhoto(r.to.id, r.from.id),
+            place: r.place,
+            time: r.time,
+            tag: r.tag,
+          }
         : null,
   }
 }
@@ -308,5 +321,13 @@ export function inboxView(r: Req) {
 }
 
 export function matchViewForAuthor(r: Req) {
-  return { name: r.from.first_name, username: r.from.username, contact: contactUrl(r.from), place: r.place, time: r.time, tag: r.tag }
+  return {
+    name: r.from.first_name,
+    username: r.from.username,
+    contact: contactUrl(r.from),
+    photo: signPhoto(r.from.id, r.to.id),
+    place: r.place,
+    time: r.time,
+    tag: r.tag,
+  }
 }
