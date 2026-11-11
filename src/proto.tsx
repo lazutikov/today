@@ -14,6 +14,7 @@ import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from 
 import { guessGender } from './gender'
 import { NotificationsPage } from './notifications'
 import { rankFeed } from './rank'
+import { useMyLocation, type Coords } from './location'
 import { clearTgUser, inMiniApp, loadSession, loadTgUser, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
 import { identify, resetIdentity, track } from './track'
 import {
@@ -226,6 +227,15 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     live ? EVENTS : [...loadMyPosts().filter((c) => c.kind === 'event'), ...EVENTS],
   )
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
+  // Position for distances: never leaves the phone
+  const here = useMyLocation()
+  const [locHidden, setLocHidden] = useState(() => {
+    try {
+      return localStorage.getItem('today.locPromptHidden') === '1'
+    } catch {
+      return false
+    }
+  })
   const [notifs, setNotifs] = useState<{ items: Notif[]; seen: number }>({ items: [], seen: 0 })
   const unread = notifs.items.filter((n) => n.at > notifs.seen).length
   const mergeNotifs = (next: { items: Notif[]; seen: number }) =>
@@ -634,6 +644,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       ? [...realPosts.filter((c) => c.kind === 'person'), ...people]
       : [...realPosts.filter((c) => c.kind === 'event'), ...events],
     profile.areas,
+    new Date(),
+    here.coords,
   )
 
   return (
@@ -689,11 +701,34 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         ),
       )}
 
+      {!here.coords && !locHidden && here.state !== 'denied' && here.state !== 'far' && tab === 'events' && (
+        <div className="loc-chip">
+          <button className="loc-chip-main" onClick={here.request} disabled={here.state === 'asking'}>
+            📍 {here.state === 'asking' ? 'Шукаю, де ти…' : here.state === 'off' ? 'Не вдалося. Спробувати ще раз' : 'Показати, скільки добиратися до планів'}
+          </button>
+          <button
+            className="loc-chip-x"
+            aria-label="Сховати"
+            onClick={() => {
+              setLocHidden(true)
+              try {
+                localStorage.setItem('today.locPromptHidden', '1')
+              } catch {
+                /* ignore */
+              }
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <ul className="cards" id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {cards.map((card) => (
           <li key={card.id}>
             <CardView
               card={card}
+              from={here.coords}
               onOpen={() => {
                 track('card_tap', { card: card.id })
                 setOverlay({ t: 'detail', card })
@@ -725,6 +760,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'detail' && (
         <DetailSheet
           card={[...realPosts, ...people, ...events].find((c) => c.id === overlay.card.id) ?? overlay.card}
+          from={here.coords}
           onClose={() => setOverlay(null)}
           onInvite={() =>
             busyWaiting
@@ -904,12 +940,14 @@ function PlaceRows({ place, address, time }: { place: string; address?: string; 
 
 function DetailSheet({
   card,
+  from,
   onClose,
   onInvite,
   onJoin,
   onDelete,
 }: {
   card: FeedCard
+  from?: Coords | null
   onClose: () => void
   onInvite: () => void
   onJoin: () => void
@@ -919,7 +957,7 @@ function DetailSheet({
   return (
     <DarkSheet title={card.kind === 'person' ? 'Покличте мене' : 'Кличу з собою'} onClose={onClose}>
       <div className="dsheet-card">
-        <CardView card={card} />
+        <CardView card={card} from={from} />
       </div>
       {card.lat !== undefined && card.lon !== undefined && (
         <a className="route-link" href={mapsLink({ lat: card.lat, lon: card.lon })} target="_blank" rel="noopener">

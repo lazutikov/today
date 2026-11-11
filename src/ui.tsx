@@ -1,3 +1,4 @@
+import { distanceKm, travelLabel, type Coords } from './location'
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { AREAS, MAX_AREAS, TAG_COLORS, WHOLE_CITY, type FeedCard } from './feed'
 
@@ -128,15 +129,31 @@ export function shortAddress(address?: string): string {
     .replace(/^провулок /i, 'пров. ')
 }
 
-/** «Центр · вул. Городоцька, 25» under the venue name */
-export function placeLine(card: Pick<FeedCard, 'areas' | 'place' | 'venueAddress'>): string {
+/** «Центр · ~12 хв пішки · вул. Городоцька, 25» under the venue name */
+export function placeLine(
+  card: Pick<FeedCard, 'areas' | 'place' | 'venueAddress' | 'lat' | 'lon'>,
+  from?: Coords | null,
+): string {
   const area = card.areas?.[0] ?? card.place.split(',')[0]
-  return [area, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
+  const far =
+    from && card.lat !== undefined && card.lon !== undefined
+      ? travelLabel(distanceKm(from, { lat: card.lat, lon: card.lon }))
+      : ''
+  return [area, far, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
 }
 
 /* ---------- Card (Figma "Frame 20") ---------- */
 
-export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void }) {
+export function CardView({
+  card,
+  onOpen,
+  from,
+}: {
+  card: FeedCard
+  onOpen?: () => void
+  /** My position (stays on the phone): adds "1,2 км" to the place */
+  from?: Coords | null
+}) {
   const who = whoLine(card)
   return (
     <article className={card.mine ? 'fcard mine' : 'fcard'}>
@@ -153,7 +170,7 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
             <PinIcon />
             <div>
               <p className="fcard-venue">{card.venue}</p>
-              <p className="fcard-addr">{placeLine(card)}</p>
+              <p className="fcard-addr">{placeLine(card, from)}</p>
             </div>
           </div>
         ) : (
