@@ -197,6 +197,10 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
   const [notifs, setNotifs] = useState<{ items: Notif[]; seen: number }>({ items: [], seen: 0 })
   const unread = notifs.items.filter((n) => n.at > notifs.seen).length
+  const mergeNotifs = (next: { items: Notif[]; seen: number }) =>
+    setNotifs((cur) => ({ items: next.items, seen: Math.max(cur.seen, next.seen) }))
+  // What counted as "new" at the moment the page was opened (highlighted while it stays open)
+  const [pageSeen, setPageSeen] = useState(0)
   // Cancelled-meeting notices the person already closed
   const [dismissed, setDismissed] = useState<string[]>(() => {
     try {
@@ -218,7 +222,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const refreshPosts = () => {
     if (!live) return
     fetchPosts(CITY).then(setRealPosts)
-    fetchNotifs().then(setNotifs)
+    fetchNotifs().then(mergeNotifs)
     fetchMeetings().then((list) => {
       const real: Match[] = list.map((m) => ({
         id: `m-${m.id}`,
@@ -265,7 +269,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     // Poll only while the app is on screen: a hidden tab costs nothing (free Redis has a monthly quota).
     const visible = () => document.visibilityState === 'visible'
     const feed = window.setInterval(() => visible() && refreshPosts(), 30000)
-    const bell = window.setInterval(() => visible() && fetchNotifs().then(setNotifs), 15000)
+    const bell = window.setInterval(() => visible() && fetchNotifs().then(mergeNotifs), 15000)
     const onVisible = () => document.visibilityState === 'visible' && refreshPosts()
     document.addEventListener('visibilitychange', onVisible)
     const inbox = window.setInterval(async () => {
@@ -485,12 +489,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   /* ----- notifications ----- */
   const openNotifs = () => {
     track('notifs_open', { unread })
+    setPageSeen(notifs.seen)
     setOverlay({ t: 'notifs' })
-    if (unread > 0) {
-      markNotifsSeen()
-      // Keep the "Нові" group visible while the page is open; next visit they move to "Раніше".
-      later(60000, () => setNotifs((n) => ({ ...n, seen: Date.now() })))
-    }
+    // Read the moment the page opens: the badge clears now, the server remembers it for other devices.
+    const now = Date.now()
+    setNotifs((n) => ({ ...n, seen: Math.max(n.seen, now) }))
+    if (unread > 0) markNotifsSeen()
   }
 
   const openNotif = (n: Notif) => {
@@ -615,7 +619,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'notifs' && (
         <NotificationsPage
           items={notifs.items}
-          seen={notifs.seen}
+          seen={pageSeen}
           onBack={() => setOverlay(null)}
           onOpen={openNotif}
         />
