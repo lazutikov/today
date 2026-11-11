@@ -8,6 +8,9 @@ import '@fontsource/manrope/800.css'
 import '../index.css'
 import './site.css'
 import Site from './Site'
+import { keepFresh } from '../freshness'
+
+keepFresh('/')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
