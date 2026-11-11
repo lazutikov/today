@@ -28,6 +28,7 @@ export function distanceKm(a: Coords, b: Coords): number {
  * ~30% detours) up to 25 min, otherwise a taxi (~25 km/h in town + pickup).
  */
 export function travelLabel(km: number): string {
+  if (km > MAX_FROM_CITY_KM) return formatDistance(km) // out of town: just the distance
   const walk = ((km * 1.3) / 4.8) * 60
   const round = (m: number) => (m < 10 ? Math.max(1, Math.round(m)) : Math.round(m / 5) * 5)
   if (walk <= 25) return `~${round(walk)} хв пішки`
@@ -69,20 +70,16 @@ function locate(): Promise<Coords> {
 
 export type LocState = 'unknown' | 'asking' | 'on' | 'denied' | 'off' | 'far'
 
-const inCity = (c: Coords) => distanceKm(c, CITY_CENTER) <= MAX_FROM_CITY_KM
+/** Is this person in town? (far away we show plain km instead of time to get there) */
+export const inCity = (c: Coords) => distanceKm(c, CITY_CENTER) <= MAX_FROM_CITY_KM
 
 /** My position for distances: silent if already allowed, otherwise on request(). */
 export function useMyLocation() {
-  const [coords, setCoordsRaw] = useState<Coords | null>(() => {
-    const c = saved()
-    return c && inCity(c) ? c : null
-  })
+  const [coords, setCoordsRaw] = useState<Coords | null>(saved)
   const [state, setState] = useState<LocState>(coords ? 'on' : 'unknown')
-  // Out of town: keep quiet instead of "540 км"
   const setCoords = (c: Coords) => {
-    if (inCity(c)) setCoordsRaw(c)
-    else setState('far')
-    return inCity(c)
+    setCoordsRaw(c)
+    return true
   }
 
   useEffect(() => {
