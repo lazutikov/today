@@ -262,11 +262,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     if (!live) return
     refreshPosts()
-    const feed = window.setInterval(refreshPosts, 20000)
-    const bell = window.setInterval(() => fetchNotifs().then(setNotifs), 8000)
+    // Poll only while the app is on screen: a hidden tab costs nothing (free Redis has a monthly quota).
+    const visible = () => document.visibilityState === 'visible'
+    const feed = window.setInterval(() => visible() && refreshPosts(), 30000)
+    const bell = window.setInterval(() => visible() && fetchNotifs().then(setNotifs), 15000)
     const onVisible = () => document.visibilityState === 'visible' && refreshPosts()
     document.addEventListener('visibilitychange', onVisible)
     const inbox = window.setInterval(async () => {
+      if (!visible()) return
       const cur = overlayRef.current
       if (cur && cur.t !== 'detail' && cur.t !== 'posted') return
       const items = await fetchInbox()
@@ -289,7 +292,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           expiresAt: next.expiresAt,
         },
       })
-    }, 5000)
+    }, 8000)
     return () => {
       window.clearInterval(feed)
       window.clearInterval(bell)
