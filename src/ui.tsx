@@ -129,7 +129,7 @@ export function shortAddress(address?: string): string {
     .replace(/^провулок /i, 'пров. ')
 }
 
-/** «Центр · ~12 хв пішки · вул. Городоцька, 25» under the venue name */
+/** «~12 хв пішки · Центр · вул. Городоцька, 25» under the venue name */
 export function placeLine(
   card: Pick<FeedCard, 'areas' | 'place' | 'venueAddress' | 'lat' | 'lon'>,
   from?: Coords | null,
@@ -139,7 +139,7 @@ export function placeLine(
     from && card.lat !== undefined && card.lon !== undefined
       ? travelLabel(distanceKm(from, { lat: card.lat, lon: card.lon }))
       : ''
-  return [area, far, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
+  return [far, area, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
 }
 
 /* ---------- Card (Figma "Frame 20") ---------- */
