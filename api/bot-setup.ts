@@ -15,5 +15,26 @@ export async function GET(request: Request): Promise<Response> {
     body: JSON.stringify({ url, secret_token: webhookSecret(token), allowed_updates: ['message'], drop_pending_updates: true }),
   })
   const tg = (await res.json()) as { ok: boolean; description?: string }
-  return json({ ok: tg.ok, webhook: url, telegram: tg.description ?? null, storage: Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) })
+
+  // Profile texts and the menu button, so nobody has to click through @BotFather.
+  const site = `https://${request.headers.get('host')}`
+  const call = (method: string, body: unknown) =>
+    fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json() as Promise<{ ok: boolean }>)
+  const profile = await Promise.all([
+    call('setMyName', { name: 'today' }),
+    call('setMyShortDescription', { short_description: 'Компанія на сьогодні у Львові: кава, кіно, боулінг, прогулянка.' }),
+    call('setMyDescription', {
+      description:
+        'today — компанія на сьогодні у Львові ☕️🎳🎬\n\n' +
+        'Пишеш, що хочеш сьогодні, і за кілька хвилин маєш план і людей поруч.\n\n' +
+        'Натисни «Почати» внизу, щоб увійти. Без пароля і номера телефону.',
+    }),
+    call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Відкрити', web_app: { url: `${site}/app` } } }),
+  ])
+
+  return json({ ok: tg.ok, webhook: url, telegram: tg.description ?? null, storage: Boolean(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL), profile: profile.map((r) => r.ok) })
 }

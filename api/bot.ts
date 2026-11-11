@@ -37,9 +37,21 @@ export async function POST(request: Request): Promise<Response> {
     if (known === 'pending') {
       const user = { id: msg.from.id, first_name: msg.from.first_name ?? '', username: msg.from.username ?? null, photo_url: null }
       await kv('SET', `login:${code}`, JSON.stringify(user), 'EX', CODE_TTL)
-      await send(token, msg.chat.id, 'Готово, ти увійшов 👋 Повертайся на сайт, там уже все відкрилось.')
+      await send(
+        token,
+        msg.chat.id,
+        `Готово, ${msg.from.first_name || 'привіт'}! Ти увійшов у today 👋\n\nПовертайся на сайт: вкладка вже відкрилась сама. Якщо загубив її, тисни кнопку.`,
+        { inline_keyboard: [[{ text: 'Повернутися в today', url: `${site}/app?login=${code}` }]] },
+      )
+    } else if (known) {
+      // Already confirmed (Start tapped twice): just offer the way back again.
+      await send(token, msg.chat.id, 'Ти вже увійшов 👌', {
+        inline_keyboard: [[{ text: 'Повернутися в today', url: `${site}/app?login=${code}` }]],
+      })
     } else {
-      await send(token, msg.chat.id, 'Це посилання для входу вже не діє. Натисни «Увійти через Telegram» на сайті ще раз.')
+      await send(token, msg.chat.id, 'Це посилання для входу вже не діє. Натисни «Увійти через Telegram» на сайті ще раз.', {
+        inline_keyboard: [[{ text: 'Відкрити сайт', url: `${site}/app` }]],
+      })
     }
     return json({ ok: true })
   }

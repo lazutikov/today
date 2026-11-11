@@ -26,6 +26,5 @@ export async function GET(request: Request): Promise<Response> {
   const value = (await kv('GET', `login:${code}`)) as string | null
   if (!value) return json({ ok: false, error: 'expired' }, 410)
   if (value === 'pending') return json({ ok: false, pending: true })
-  await kv('DEL', `login:${code}`)
   return json({ ok: true, user: JSON.parse(value) })
 }
