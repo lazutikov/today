@@ -245,7 +245,8 @@ const lviv = CITY === 'lviv'
 export const AREAS = lviv ? AREAS_LVIV : AREAS_WARSAW
 export const VENUES = lviv ? VENUES_LVIV : VENUES_WARSAW
 export const PEOPLE = lviv ? PEOPLE_LVIV : PEOPLE_WARSAW
-export const EVENTS = lviv ? EVENTS_LVIV : EVENTS_WARSAW
+// Demo plans look for exactly one more person each: the button always says «ще 1 місце».
+export const EVENTS = (lviv ? EVENTS_LVIV : EVENTS_WARSAW).map((e) => ({ ...e, capacity: (e.taken ?? 1) + 1 }))
 export const INVITERS = lviv ? INVITERS_LVIV : INVITERS_WARSAW
 
 /** "Whole city" option: always the last area in the list. */
