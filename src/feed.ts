@@ -23,6 +23,8 @@ export type FeedCard = {
   taken?: number
   capacity?: number
   mine?: boolean
+  /** Posted by a real person through the server (answers are real too) */
+  real?: boolean
 }
 
 export type City = 'warsaw' | 'lviv'

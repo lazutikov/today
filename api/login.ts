@@ -4,7 +4,7 @@
  *  GET  /api/login?code=...     the browser polls until the bot has confirmed it
  * The bot webhook (/api/bot) confirms the code when the user taps Start.
  */
-import { CODE_RE, CODE_TTL, json, kv, kvReady } from './_kv.js'
+import { CODE_RE, CODE_TTL, json, kv, kvReady, signSession } from './_kv.js'
 
 export async function POST(request: Request): Promise<Response> {
   if (!kvReady || !process.env.TELEGRAM_BOT_TOKEN) return json({ ok: false, error: 'not_configured' }, 503)
@@ -26,5 +26,6 @@ export async function GET(request: Request): Promise<Response> {
   const value = (await kv('GET', `login:${code}`)) as string | null
   if (!value) return json({ ok: false, error: 'expired' }, 410)
   if (value === 'pending') return json({ ok: false, pending: true })
-  return json({ ok: true, user: JSON.parse(value) })
+  const user = JSON.parse(value)
+  return json({ ok: true, user, session: signSession(user) })
 }

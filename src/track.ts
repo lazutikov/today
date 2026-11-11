@@ -83,6 +83,8 @@ export type EventName =
   | 'onboarding_done'
   | 'sign_out'
   | 'login_success'
+  | 'join_result'
+  | 'incoming_view'
   | 'login_error'
 
 export function track(name: EventName, props: Record<string, unknown> = {}) {

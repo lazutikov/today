@@ -3,6 +3,7 @@
  * The bot token lives only in the Vercel env var TELEGRAM_BOT_TOKEN, never in the client.
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { signSession } from './_kv.js'
 
 const MAX_AGE_SECONDS = 24 * 60 * 60
 
@@ -37,15 +38,13 @@ export async function POST(request: Request): Promise<Response> {
   const age = Date.now() / 1000 - Number(fields.auth_date)
   if (!(age < MAX_AGE_SECONDS)) return json({ ok: false, error: 'expired' }, 401)
 
-  return json({
-    ok: true,
-    user: {
-      id: fields.id,
-      first_name: fields.first_name,
-      username: fields.username ?? null,
-      photo_url: fields.photo_url ?? null,
-    },
-  })
+  const user = {
+    id: Number(fields.id),
+    first_name: String(fields.first_name ?? ''),
+    username: (fields.username as string | undefined) ?? null,
+    photo_url: (fields.photo_url as string | undefined) ?? null,
+  }
+  return json({ ok: true, user, session: signSession(user) })
 }
 
 /** https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app */
@@ -74,10 +73,13 @@ function verifyMiniApp(initData: string, token: string): Response {
   } catch {
     return json({ ok: false, error: 'bad_user' }, 400)
   }
-  return json({
-    ok: true,
-    user: { id: u.id, first_name: u.first_name, username: u.username ?? null, photo_url: u.photo_url ?? null },
-  })
+  const user = {
+    id: Number(u.id),
+    first_name: String(u.first_name ?? ''),
+    username: (u.username as string | undefined) ?? null,
+    photo_url: (u.photo_url as string | undefined) ?? null,
+  }
+  return json({ ok: true, user, session: signSession(user) })
 }
 
 function json(body: unknown, status = 200) {

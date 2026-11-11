@@ -65,7 +65,7 @@ export async function miniAppLogin(): Promise<TgUser> {
   })
   const body = await res.json()
   if (!body.ok) throw new Error(body.error || 'auth_failed')
-  saveTgUser(body.user)
+  saveTgUser(body.user, body.session)
   return body.user
 }
 
@@ -104,7 +104,7 @@ export async function telegramLogin(): Promise<TgUser> {
   })
   const body = await res.json()
   if (!body.ok) throw new Error(body.error || 'auth_failed')
-  saveTgUser(body.user)
+  saveTgUser(body.user, body.session)
   return body.user
 }
 
@@ -146,7 +146,7 @@ export function waitForBotLogin(code: string, signal: AbortSignal): Promise<TgUs
         const body = await res.json()
         if (body.ok) {
           cleanup()
-          saveTgUser(body.user)
+          saveTgUser(body.user, body.session)
           return resolve(body.user)
         }
         if (res.status === 410) {
@@ -187,8 +187,20 @@ export function loadTgUser(): TgUser | null {
   }
 }
 
-function saveTgUser(u: TgUser) {
+const SESSION_KEY = 'today.session.v1'
+
+/** Signed by our server; lets the app read and write the shared feed. */
+export function loadSession(): string | null {
   try {
+    return localStorage.getItem(SESSION_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveTgUser(u: TgUser, session?: string) {
+  try {
+    if (session) localStorage.setItem(SESSION_KEY, session)
     localStorage.setItem(USER_KEY, JSON.stringify(u))
   } catch {
     /* memory only */
@@ -198,6 +210,7 @@ function saveTgUser(u: TgUser) {
 export function clearTgUser() {
   try {
     localStorage.removeItem(USER_KEY)
+    localStorage.removeItem(SESSION_KEY)
   } catch {
     /* ignore */
   }

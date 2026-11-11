@@ -1,14 +1,25 @@
 /**
  * Working prototype of the live mode.
- * Everything runs in memory; other people's answers are simulated with timers.
+ * Demo cards answer by themselves (simulated). Posts by real people come from
+ * the server, and requests to them reach a real person through the bot.
  */
 import { useEffect, useRef, useState } from 'react'
-import { CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
+import { CITY, CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
 import { clearTgUser, inMiniApp, miniAppLogin, setupMiniApp } from './telegram'
 import { identify, resetIdentity, track } from './track'
+import {
+  answerRequest,
+  createPost,
+  fetchInbox,
+  fetchPosts,
+  isLive,
+  removePost,
+  requestStatus,
+  sendRequest,
+} from './live'
 import {
   AreaPicker,
   CardView,
@@ -32,6 +43,8 @@ type Match = {
   place: string
   time: string
   source: 'invite' | 'event' | 'incoming'
+  /** Real matches: link that opens a chat with the person */
+  contact?: string
 }
 
 type Incoming = {
@@ -43,6 +56,9 @@ type Incoming = {
   kind: 'invite' | 'join'
   /** Headline of the post this request answers */
   post: string
+  /** Real requests: server id and deadline */
+  reqId?: string
+  expiresAt?: number
 }
 
 type Overlay =
@@ -148,8 +164,18 @@ function saveMyPosts(cards: FeedCard[]) {
 
 function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>('people')
-  const [people, setPeople] = useState<FeedCard[]>(() => [...loadMyPosts().filter((c) => c.kind === 'person'), ...PEOPLE])
-  const [events, setEvents] = useState<FeedCard[]>(() => [...loadMyPosts().filter((c) => c.kind === 'event'), ...EVENTS])
+  // Signed in through the server: own posts and answers are real. Otherwise everything is a local demo.
+  const [live] = useState(isLive)
+  const [people, setPeople] = useState<FeedCard[]>(() =>
+    live ? PEOPLE : [...loadMyPosts().filter((c) => c.kind === 'person'), ...PEOPLE],
+  )
+  const [events, setEvents] = useState<FeedCard[]>(() =>
+    live ? EVENTS : [...loadMyPosts().filter((c) => c.kind === 'event'), ...EVENTS],
+  )
+  const [realPosts, setRealPosts] = useState<FeedCard[]>([])
+  const refreshPosts = () => {
+    if (live) fetchPosts(CITY).then(setRealPosts)
+  }
 
   useEffect(() => {
     saveMyPosts([...people, ...events].filter((c) => c.mine))
@@ -165,10 +191,86 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }, [overlay])
 
   useEffect(() => {
-    track('feed_view', { mode: 'proto' })
+    track('feed_view', { mode: live ? 'live' : 'proto' })
     const ids = timers.current
     return () => ids.forEach(clearTimeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /* ----- real feed and incoming requests (polling) ----- */
+  const seenInbox = useRef(new Set<string>())
+  useEffect(() => {
+    if (!live) return
+    refreshPosts()
+    const feed = window.setInterval(refreshPosts, 20000)
+    const inbox = window.setInterval(async () => {
+      const cur = overlayRef.current
+      if (cur && cur.t !== 'detail' && cur.t !== 'posted') return
+      const items = await fetchInbox()
+      const next = items.find((i) => !seenInbox.current.has(i.id))
+      if (!next) return
+      seenInbox.current.add(next.id)
+      const who = [next.from.gender, next.from.age || ''].filter(Boolean).join(', ')
+      track('incoming_view', { real: true, kind: next.type })
+      setOverlay({
+        t: 'incoming',
+        inc: {
+          from: { name: next.from.gender || 'Людина', age: next.from.age },
+          tag: next.tag,
+          place: next.place,
+          time: next.time,
+          note: [who, next.from.bio].filter(Boolean).join(': ') || 'Без опису',
+          kind: next.type,
+          post: next.post,
+          reqId: next.id,
+          expiresAt: next.expiresAt,
+        },
+      })
+    }, 5000)
+    return () => {
+      window.clearInterval(feed)
+      window.clearInterval(inbox)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Sends a real invite / join request and waits for the person's answer. */
+  const realRequest = async (card: FeedCard, extra: { place?: string; time?: string }) => {
+    const res = await sendRequest(card.id, extra, profile)
+    if (res.ok === false) {
+      const msg: Record<string, string> = {
+        busy: 'Спершу дочекайся відповіді на попереднє запрошення',
+        full: 'Місць уже немає',
+        own_post: 'Це твій пост',
+        post_gone: 'Цей план уже неактуальний',
+      }
+      setOverlay(null)
+      say(msg[res.error] ?? 'Не вийшло надіслати, спробуй ще раз')
+      if (res.error === 'post_gone') refreshPosts()
+      return
+    }
+    const id = res.request.id
+    const poll = async () => {
+      const st = await requestStatus(id)
+      if (!st || st.status === 'pending') return later(3000, poll)
+      track(card.kind === 'event' ? 'join_result' : 'invite_result', { card: card.id, real: true, status: st.status })
+      if (st.status === 'yes' && st.match) {
+        refreshPosts()
+        addMatch({
+          id: `m-${id}`,
+          with: [{ name: st.match.name, age: card.age }],
+          tag: st.match.tag,
+          place: st.match.place,
+          time: st.match.time,
+          source: card.kind === 'event' ? 'event' : 'invite',
+          contact: st.match.contact,
+        })
+      } else {
+        setOverlay({ t: 'declined', card })
+      }
+    }
+    later(3000, poll)
+  }
 
   const later = (ms: number, fn: () => void) => {
     timers.current.push(window.setTimeout(fn, ms))
@@ -189,8 +291,9 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   /* ----- outgoing invite to a person ----- */
   const sendInvite = (card: FeedCard, place: string, time: string) => {
-    track('invite_send', { card: card.id, place, time })
+    track('invite_send', { card: card.id, place, time, real: Boolean(card.real) })
     setOverlay({ t: 'waiting', card, place, time })
+    if (card.real) return void realRequest(card, { place, time })
     // Simulated answer: most people say yes in the demo.
     later(4500, () => {
       const yes = card.id !== 'person-2'
@@ -212,8 +315,9 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   /* ----- joining an event ----- */
   const joinEvent = (card: FeedCard) => {
-    track('join_request', { card: card.id })
+    track('join_request', { card: card.id, real: Boolean(card.real) })
     setOverlay({ t: 'joining', card })
+    if (card.real) return void realRequest(card, {})
     later(3500, () => {
       setEvents((list) =>
         list.map((e) => (e.id === card.id ? { ...e, taken: (e.taken ?? 0) + 1 } : e)),
@@ -230,7 +334,16 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }
 
   /* ----- creating a post ----- */
-  const publish = (card: FeedCard) => {
+  const publish = async (card: FeedCard) => {
+    if (live) {
+      // Real post: everyone signed in sees it; answers come from real people only.
+      const saved = await createPost(card, CITY)
+      if (!saved) return say('Не вдалося опублікувати, спробуй ще раз')
+      setRealPosts((l) => [saved, ...l.filter((c) => !(c.mine && c.kind === saved.kind))])
+      setTab(saved.kind === 'person' ? 'people' : 'events')
+      setOverlay({ t: 'posted', card: saved })
+      return
+    }
     if (card.kind === 'person') {
       setPeople((l) => [card, ...l.filter((c) => !c.mine)])
       setTab('people')
@@ -284,6 +397,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   const deleteMine = (card: FeedCard) => {
     track('post_delete', { kind: card.kind })
+    if (card.real) {
+      removePost(card.id)
+      setRealPosts((l) => l.filter((c) => c.id !== card.id))
+      setOverlay(null)
+      return say('Пост видалено')
+    }
     if (card.kind === 'person') setPeople((l) => l.filter((c) => c.id !== card.id))
     else setEvents((l) => l.filter((c) => c.id !== card.id))
     setOverlay(null)
@@ -296,7 +415,10 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     setTab(next)
   }
 
-  const cards = tab === 'people' ? people : events
+  const cards =
+    tab === 'people'
+      ? [...realPosts.filter((c) => c.kind === 'person'), ...people]
+      : [...realPosts.filter((c) => c.kind === 'event'), ...events]
 
   return (
     <div className="screen">
@@ -408,7 +530,11 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             setOverlay(null)
             say('Дякуємо, ми перевіримо. Скасовано без штрафу')
           }}
-          onTelegram={() => say('У робочій версії тут відкриється чат у Telegram')}
+          onTelegram={() =>
+            overlay.match.contact
+              ? window.open(overlay.match.contact, '_blank', 'noopener')
+              : say('Це демо-картка: у справжньому матчі тут відкриється чат у Telegram')
+          }
         />
       )}
       {overlay?.t === 'create' && (
@@ -437,8 +563,26 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'incoming' && (
         <IncomingSheet
           inc={overlay.inc}
-          onYes={() => {
-            track('incoming_answer', { yes: true })
+          onYes={async () => {
+            track('incoming_answer', { yes: true, real: Boolean(overlay.inc.reqId) })
+            if (overlay.inc.reqId) {
+              const inc = overlay.inc
+              const r = await answerRequest(inc.reqId!, true)
+              if (!r.ok || !r.match) {
+                setOverlay(null)
+                return say(r.status === 'expired' ? 'Час на відповідь вийшов' : 'На це вже відповіли')
+              }
+              refreshPosts()
+              return addMatch({
+                id: `m-${inc.reqId}`,
+                with: [{ name: r.match.name, age: inc.from.age }],
+                tag: inc.tag,
+                place: inc.place,
+                time: inc.time,
+                source: 'incoming',
+                contact: r.match.contact,
+              })
+            }
             addMatch({
               id: `m-${Date.now()}`,
               with: [overlay.inc.from],
@@ -459,7 +603,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'reason' && (
         <ReasonSheet
           onPick={(reason) => {
-            track('incoming_answer', { yes: false, reason })
+            track('incoming_answer', { yes: false, reason, real: Boolean(overlay.inc.reqId) })
+            if (overlay.inc.reqId) answerRequest(overlay.inc.reqId, false, reason)
             setOverlay(null)
             say('Відмову надіслано. Без пояснень і без образ')
           }}
@@ -724,7 +869,9 @@ function IncomingSheet({
   onNo: () => void
   onExpire: () => void
 }) {
-  const { left, label } = useCountdown(ANSWER_SECONDS)
+  const { left, label } = useCountdown(
+    inc.expiresAt ? Math.max(1, Math.round((inc.expiresAt - Date.now()) / 1000)) : ANSWER_SECONDS,
+  )
   useEffect(() => {
     if (left === 0) onExpire()
   }, [left, onExpire])

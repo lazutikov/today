@@ -5,13 +5,15 @@
  * Telegram proves it is Telegram with the secret_token set in /api/bot-setup.
  */
 import { createHash } from 'node:crypto'
-import { CODE_RE, CODE_TTL, json, kv, kvReady } from './_kv.js'
+import { CODE_RE, CODE_TTL, json, kv, kvReady, tg } from './_kv.js'
+import { answerReq } from './_social.js'
 
 export function webhookSecret(token: string) {
   return createHash('sha256').update(`today-webhook:${token}`).digest('hex').slice(0, 48)
 }
 
 type Update = {
+  callback_query?: { id: string; from: { id: number }; data?: string }
   message?: {
     chat: { id: number }
     text?: string
@@ -25,6 +27,23 @@ export async function POST(request: Request): Promise<Response> {
   if (request.headers.get('x-telegram-bot-api-secret-token') !== webhookSecret(token)) return json({ ok: false }, 401)
 
   const update = (await request.json()) as Update
+
+  // "Так" / "Ні" under an invite or join request
+  const cb = update.callback_query
+  if (cb?.data?.startsWith('r:')) {
+    const [, id, a] = cb.data.split(':')
+    const res = await answerReq(id, cb.from.id, a === 'y')
+    const note = res.ok
+      ? a === 'y'
+        ? 'Є матч! Контакт надіслано'
+        : 'Відмову надіслано'
+      : res.status === 'expired'
+        ? 'Час на відповідь вийшов'
+        : 'На це вже відповіли'
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: note })
+    return json({ ok: true })
+  }
+
   const msg = update.message
   if (!msg?.from || !msg.text?.startsWith('/start')) return json({ ok: true })
 
