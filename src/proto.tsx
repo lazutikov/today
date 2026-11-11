@@ -897,6 +897,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'filters' && (
         <FiltersSheet
           value={filters}
+          available={TAGS.filter((t) => cards.some((c) => c.tags.includes(t)))}
           withRadius={tab === 'events'}
           canRadius={Boolean(from)}
           placeLabel={spot.label}
@@ -1124,6 +1125,7 @@ function saveFilters(f: Filters) {
 
 function FiltersSheet({
   value,
+  available,
   withRadius,
   canRadius,
   placeLabel,
@@ -1133,6 +1135,8 @@ function FiltersSheet({
   onApply,
 }: {
   value: Filters
+  /** Categories that actually occur in this tab of the feed */
+  available: string[]
   /** Distance only for plans (free-time posts have no point) */
   withRadius: boolean
   /** Known position or a picked address */
@@ -1177,9 +1181,14 @@ function FiltersSheet({
           )}
         </>
       )}
+      {/* Only what's in the feed now (plus anything already picked, so it can be unpicked) */}
+      {(() => {
+        const shownCats = TAGS.filter((t) => available.includes(t) || f.cats.includes(t))
+        return shownCats.length === 0 ? null : (
+          <>
       <p className="dlabel">Категорії</p>
       <div className="dchips">
-        {TAGS.map((t) => {
+        {shownCats.map((t) => {
           const on = f.cats.includes(t)
           const c = TAG_COLORS[t]
           return (
@@ -1195,6 +1204,9 @@ function FiltersSheet({
           )
         })}
       </div>
+          </>
+        )
+      })()}
       <button className="dbtn" onClick={() => onApply(f)}>
         {n > 0 ? `Показати ${n}` : 'Нікого за цими фільтрами'}
       </button>
