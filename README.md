@@ -1,6 +1,6 @@
 # today
 
-Same-day offline meetups. Landing at `/`, clickable prototype at `/app`. Lviv by default, `#warsaw` switches to Warsaw.
+Same-day offline meetups. Landing at `/` (index.html), clickable prototype at `/app` (app.html). Lviv by default, `#warsaw` switches to Warsaw.
 
 ## Run locally
 
