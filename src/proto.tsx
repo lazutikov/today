@@ -254,6 +254,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     if (!live) return
     refreshPosts()
     const feed = window.setInterval(refreshPosts, 20000)
+    const onVisible = () => document.visibilityState === 'visible' && refreshPosts()
+    document.addEventListener('visibilitychange', onVisible)
     const inbox = window.setInterval(async () => {
       const cur = overlayRef.current
       if (cur && cur.t !== 'detail' && cur.t !== 'posted') return
@@ -281,6 +283,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     return () => {
       window.clearInterval(feed)
       window.clearInterval(inbox)
+      document.removeEventListener('visibilitychange', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -542,7 +545,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
       {overlay?.t === 'detail' && (
         <DetailSheet
-          card={overlay.card}
+          card={[...realPosts, ...people, ...events].find((c) => c.id === overlay.card.id) ?? overlay.card}
           onClose={() => setOverlay(null)}
           onInvite={() =>
             busyWaiting
@@ -589,14 +592,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           onClose={() => setOverlay(null)}
           onCancel={(free) => {
             track('match_cancel', { free, real: Boolean(overlay.match.reqId) })
-            if (overlay.match.reqId) cancelMeetingApi(overlay.match.reqId, false)
+            if (overlay.match.reqId) cancelMeetingApi(overlay.match.reqId, false).then(refreshPosts)
             setMatches((l) => l.filter((m) => m.id !== overlay.match.id))
             setOverlay(null)
             say(free ? 'Зустріч скасовано' : 'Зустріч скасовано. Це вплине на рейтинг')
           }}
           onUncomfortable={() => {
             track('uncomfortable', { real: Boolean(overlay.match.reqId) })
-            if (overlay.match.reqId) cancelMeetingApi(overlay.match.reqId, true)
+            if (overlay.match.reqId) cancelMeetingApi(overlay.match.reqId, true).then(refreshPosts)
             setMatches((l) => l.filter((m) => m.id !== overlay.match.id))
             setOverlay(null)
             say('Дякуємо, ми перевіримо. Скасовано без штрафу')
