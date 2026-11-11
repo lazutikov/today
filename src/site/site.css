@@ -886,31 +886,68 @@ html:has(.w) body {
   }
 }
 
-/* Mobile hero: copy sits at the bottom, right above the wordmark */
-@media (max-width: 959px) {
-  .w-hero {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
+/* Hero copy sits at the bottom on every screen, right above the wordmark.
+   The scrim is eased (many stops) so the photo darkens without a visible band. */
+.w-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
 
-  .w-hero-copy {
-    padding: 0 20px calc(25vw + 16px);
-  }
+.w-hero .w-hero-copy {
+  padding: 0 20px calc(25vw + 16px);
+}
 
-  .w-hero-shade {
-    background: linear-gradient(
+.w-hero .w-hero-shade {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, rgba(0, 0, 0, 0) 16%),
+    linear-gradient(
       180deg,
-      rgba(0, 0, 0, 0.25) 0%,
-      rgba(0, 0, 0, 0) 22%,
-      rgba(0, 0, 0, 0) 38%,
-      rgba(0, 0, 0, 0.55) 62%,
-      rgba(0, 0, 0, 0.7) 100%
+      rgba(0, 0, 0, 0) 34%,
+      rgba(0, 0, 0, 0.03) 42%,
+      rgba(0, 0, 0, 0.1) 49%,
+      rgba(0, 0, 0, 0.2) 55%,
+      rgba(0, 0, 0, 0.32) 61%,
+      rgba(0, 0, 0, 0.44) 68%,
+      rgba(0, 0, 0, 0.54) 76%,
+      rgba(0, 0, 0, 0.6) 86%,
+      rgba(0, 0, 0, 0.62) 100%
     );
+}
+
+.w-hero .w-hero-img {
+  object-position: 58% 20%;
+}
+
+@media (min-width: 960px) {
+  .w-hero .w-hero-copy {
+    padding: 0 28px calc(min(30vw, 400px) * 0.62 + 28px);
   }
 
-  .w-hero-img {
-    object-position: 58% 20%;
+  .w-hero .w-hero-shade {
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0) 14%),
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.42) 0%,
+        rgba(0, 0, 0, 0.3) 22%,
+        rgba(0, 0, 0, 0.12) 40%,
+        rgba(0, 0, 0, 0) 56%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0) 30%,
+        rgba(0, 0, 0, 0.06) 40%,
+        rgba(0, 0, 0, 0.16) 50%,
+        rgba(0, 0, 0, 0.28) 60%,
+        rgba(0, 0, 0, 0.38) 72%,
+        rgba(0, 0, 0, 0.44) 86%,
+        rgba(0, 0, 0, 0.46) 100%
+      );
+  }
+
+  .w-hero .w-hero-img {
+    object-position: 58% 30%;
   }
 }
 
