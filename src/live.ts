@@ -40,6 +40,8 @@ export type Meeting = {
   post: string
   source: 'invite' | 'event' | 'incoming'
   cancelled: boolean
+  lat?: number
+  lon?: number
 }
 
 /** Today's confirmed meetings, wherever "Так" was tapped (app or bot). */
@@ -105,12 +107,14 @@ export type ReqStatus = {
     place: string
     time: string
     tag: string
+    lat?: number
+    lon?: number
   } | null
 }
 
 export async function sendRequest(
   postId: string,
-  extra: { place?: string; time?: string },
+  extra: { place?: string; time?: string; lat?: number; lon?: number; address?: string },
   profile: Profile,
 ): Promise<{ ok: true; request: ReqStatus } | { ok: false; error: string }> {
   return api('/api/requests', {

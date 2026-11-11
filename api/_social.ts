@@ -19,6 +19,10 @@ export type Post = {
   tags: string[]
   /** Districts picked by the author (for "new plan near you") */
   areas?: string[]
+  /** Exact venue from the map picker */
+  venueAddress?: string
+  lat?: number
+  lon?: number
   age: number
   gender?: 'Чоловік' | 'Жінка'
   capacity?: number
@@ -48,6 +52,10 @@ export type Req = {
   reported?: boolean
   /** Post author's age, for the requester's match screen */
   toAge?: number
+  /** Where to meet, if picked on the map */
+  lat?: number
+  lon?: number
+  address?: string
   reason?: string
   createdAt: number
   expiresAt: number
@@ -55,6 +63,15 @@ export type Req = {
 }
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+
+/** A real coordinate or undefined (map picker can also return just a name) */
+function coords(input: Record<string, unknown>): { lat?: number; lon?: number } {
+  const lat = Number(input.lat)
+  const lon = Number(input.lon)
+  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+    ? { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6 }
+    : {}
+}
 
 export function cleanPost(input: Record<string, unknown>, user: SessionUser): Post | null {
   const kind = input.kind === 'event' ? 'event' : input.kind === 'person' ? 'person' : null
@@ -75,6 +92,7 @@ export function cleanPost(input: Record<string, unknown>, user: SessionUser): Po
     areas: Array.isArray(input.areas)
       ? input.areas.filter((a): a is string => typeof a === 'string' && a.length <= 40).slice(0, 3)
       : [],
+    ...(kind === 'event' ? { venueAddress: str(input.venueAddress, 160) || undefined, ...coords(input) } : {}),
     age: Number.isFinite(age) && age > 0 && age < 100 ? Math.round(age) : 0,
     gender,
     // Author + 1..6 people they are looking for
@@ -100,6 +118,9 @@ export function publicCard(p: Post, viewerId: number | null) {
     venue: p.venue,
     tags: p.tags,
     areas: p.areas ?? [],
+    venueAddress: p.venueAddress,
+    lat: p.lat,
+    lon: p.lon,
     name: '',
     age: p.age,
     gender: p.gender,
@@ -214,7 +235,7 @@ function requestText(r: Req) {
 export async function createReq(
   user: SessionUser,
   post: Post,
-  input: { place?: string; time?: string; gender?: string; age?: number; bio?: string },
+  input: { place?: string; time?: string; gender?: string; age?: number; bio?: string; lat?: number; lon?: number; address?: string },
 ): Promise<{ ok: true; req: Req } | { ok: false; error: string }> {
   if (post.authorId === user.id) return { ok: false, error: 'own_post' }
   if (post.matched) return { ok: false, error: 'taken' }
@@ -241,6 +262,9 @@ export async function createReq(
     },
     to: { id: post.authorId, first_name: post.authorName, username: post.authorUsername },
     toAge: post.age || undefined,
+    ...(post.kind === 'event'
+      ? { lat: post.lat, lon: post.lon, address: post.venueAddress }
+      : { ...coords(input as Record<string, unknown>), address: str(input.address, 160) || undefined }),
     status: 'pending',
     createdAt: now,
     expiresAt: now + ANSWER_SECONDS * 1000,
@@ -348,6 +372,10 @@ export async function answerReq(
         ? { inline_keyboard: [[{ text: `Написати ${r.from.first_name}`, url: contactUrl(r.from) }]] }
         : undefined,
     })
+    if (r.lat !== undefined && r.lon !== undefined) {
+      for (const chat_id of [r.from.id, r.to.id])
+        await tg('sendVenue', { chat_id, latitude: r.lat, longitude: r.lon, title: r.place, address: r.address || `${r.time}` })
+    }
   } else {
     await tg('sendMessage', {
       chat_id: r.from.id,
@@ -373,6 +401,8 @@ export function reqStatusView(r: Req) {
             place: r.place,
             time: r.time,
             tag: r.tag,
+            lat: r.lat,
+            lon: r.lon,
           }
         : null,
   }
@@ -401,6 +431,8 @@ export function matchViewForAuthor(r: Req) {
     place: r.place,
     time: r.time,
     tag: r.tag,
+    lat: r.lat,
+    lon: r.lon,
   }
 }
 
@@ -419,6 +451,8 @@ export function meetingView(r: Req, viewerId: number) {
     tag: r.tag,
     place: r.place,
     time: r.time,
+    lat: r.lat,
+    lon: r.lon,
     post: r.postHeadline,
     source: iAmAuthor ? 'incoming' : r.type === 'join' ? 'event' : 'invite',
     acceptedAt: r.createdAt,

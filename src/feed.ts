@@ -27,6 +27,10 @@ export type FeedCard = {
   real?: boolean
   /** Districts as picked (the card shows them joined in `place`) */
   areas?: string[]
+  /** Venue picked on the map */
+  venueAddress?: string
+  lat?: number
+  lon?: number
   /** Real free-time post that already has a match (author's view) */
   matched?: boolean
 }

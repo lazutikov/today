@@ -3,7 +3,10 @@
  * Demo cards answer by themselves (simulated). Posts by real people come from
  * the server, and requests to them reach a real person through the bot.
  */
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { mapsLink, type Place } from './places'
+
+const PlacePicker = lazy(() => import('./PlacePicker'))
 import { CITY, CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
@@ -56,6 +59,9 @@ type Match = {
   source: 'invite' | 'event' | 'incoming'
   /** Real matches: server request id, link that opens a chat with the person, and their Telegram photo */
   reqId?: string
+  /** Meeting point, when picked on the map */
+  lat?: number
+  lon?: number
   /** The other person cancelled: shown as a grey notice until dismissed */
   cancelled?: boolean
   contact?: string
@@ -254,6 +260,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         contact: m.contact,
         photo: m.photo,
         cancelled: m.cancelled,
+        lat: m.lat,
+        lon: m.lon,
       }))
       // Server is the truth for real meetings; demo matches stay local.
       setMatches((cur) => [...real, ...cur.filter((x) => !x.reqId)])
@@ -347,7 +355,10 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }, [])
 
   /** Sends a real invite / join request and waits for the person's answer. */
-  const realRequest = async (card: FeedCard, extra: { place?: string; time?: string }) => {
+  const realRequest = async (
+    card: FeedCard,
+    extra: { place?: string; time?: string; lat?: number; lon?: number; address?: string },
+  ) => {
     const res = await sendRequest(card.id, extra, profile)
     if (res.ok === false) {
       const msg: Record<string, string> = {
@@ -379,6 +390,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           source: card.kind === 'event' ? 'event' : 'invite',
           contact: st.match.contact,
           photo: st.match.photo,
+          lat: st.match.lat,
+          lon: st.match.lon,
         })
       } else {
         setOverlay({ t: 'declined', card })
@@ -405,10 +418,13 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const busyWaiting = overlay?.t === 'waiting' || overlay?.t === 'joining'
 
   /* ----- outgoing invite to a person ----- */
-  const sendInvite = (card: FeedCard, place: string, time: string) => {
-    track('invite_send', { card: card.id, place, time, real: Boolean(card.real) })
+  const sendInvite = (card: FeedCard, place: string, time: string, geo?: Place) => {
+    track('invite_send', { card: card.id, place, time, real: Boolean(card.real), onMap: Boolean(geo) })
     setOverlay({ t: 'waiting', card, place, time })
-    if (card.real) return void realRequest(card, { place, time })
+    if (card.real) {
+      const extra = geo && Number.isFinite(geo.lat) ? { lat: geo.lat, lon: geo.lon, address: geo.address } : {}
+      return void realRequest(card, { place, time, ...extra })
+    }
     // Simulated answer: most people say yes in the demo.
     later(4500, () => {
       const yes = card.id !== 'person-2'
@@ -684,7 +700,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <InviteSheet
           card={overlay.card}
           onClose={() => setOverlay(null)}
-          onSend={(place, time) => sendInvite(overlay.card, place, time)}
+          onSend={(place, time, geo) => sendInvite(overlay.card, place, time, geo)}
         />
       )}
       {overlay?.t === 'waiting' && (
@@ -781,6 +797,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
                 source: 'incoming',
                 contact: r.match.contact,
                 photo: r.match.photo,
+                lat: r.match.lat,
+                lon: r.match.lon,
               })
             }
             addMatch({
@@ -841,7 +859,20 @@ function DetailSheet({
       <div className="dsheet-card">
         <CardView card={card} />
       </div>
-      {card.kind === 'event' && card.venue && <p className="dtext dsmall">Місце: {card.venue}</p>}
+      {card.kind === 'event' && card.venue && (
+        <p className="dtext dsmall">
+          Місце: {card.venue}
+          {card.venueAddress ? `, ${card.venueAddress}` : ''}
+          {card.lat !== undefined && card.lon !== undefined && (
+            <>
+              {' · '}
+              <a className="dlink-inline" href={mapsLink({ lat: card.lat, lon: card.lon })} target="_blank" rel="noopener">
+                на карті
+              </a>
+            </>
+          )}
+        </p>
+      )}
       {card.mine ? (
         <button className="dbtn dbtn-ghost" onClick={onDelete}>
           Видалити пост
@@ -895,20 +926,21 @@ function InviteSheet({
 }: {
   card: FeedCard
   onClose: () => void
-  onSend: (place: string, time: string) => void
+  onSend: (place: string, time: string, geo?: Place) => void
 }) {
   const suggestions = [...new Set(card.tags.flatMap((t) => VENUES[t] ?? []))].slice(0, 4)
   const slots = slotsFor(card.time)
   const [place, setPlace] = useState<string | null>(null)
-  const [custom, setCustom] = useState('')
+  const [geo, setGeo] = useState<Place | null>(null)
+  const [picking, setPicking] = useState(false)
   const [time, setTime] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const finalPlace = place === 'custom' ? custom.trim() : place
+  const finalPlace = place === 'map' ? (geo?.name ?? null) : place
   const submit = () => {
-    if (!finalPlace) return setError('Обери або напиши місце')
+    if (!finalPlace) return setError('Обери місце')
     if (!time) return setError('Обери час')
-    onSend(finalPlace, time)
+    onSend(finalPlace, time, place === 'map' ? (geo ?? undefined) : undefined)
   }
 
   return (
@@ -929,27 +961,28 @@ function InviteSheet({
           </button>
         ))}
         <button
-          className={place === 'custom' ? 'dchip on' : 'dchip'}
-          aria-pressed={place === 'custom'}
+          className={place === 'map' ? 'dchip on' : 'dchip'}
+          aria-pressed={place === 'map'}
           onClick={() => {
-            setPlace('custom')
             setError(null)
+            setPicking(true)
           }}
         >
-          Своє місце
+          {place === 'map' && geo ? `📍 ${geo.name}` : 'Інше місце на карті'}
         </button>
       </div>
-      {place === 'custom' && (
-        <input
-          className="dinput"
-          placeholder="Наприклад, Кофеїн на Marszałkowska"
-          value={custom}
-          onChange={(e) => {
-            setCustom(e.target.value)
-            setError(null)
-          }}
-          autoFocus
-        />
+      {picking && (
+        <Suspense fallback={null}>
+          <PlacePicker
+            initial={geo}
+            onClose={() => setPicking(false)}
+            onPick={(p) => {
+              setGeo(p)
+              setPlace('map')
+              setPicking(false)
+            }}
+          />
+        </Suspense>
       )}
 
       <p className="dlabel">Коли</p>
@@ -1053,7 +1086,17 @@ function MatchSheet({
         <p>
           <TagPill tag={match.tag} size="lg" />
         </p>
-        <p className="match-place">{match.place}</p>
+        <p className="match-place">
+          {match.place}
+          {match.lat !== undefined && match.lon !== undefined && (
+            <>
+              {' · '}
+              <a className="dlink-inline" href={mapsLink({ lat: match.lat, lon: match.lon })} target="_blank" rel="noopener">
+                маршрут
+              </a>
+            </>
+          )}
+        </p>
       </div>
       <button className="dbtn" onClick={onTelegram}>
         Написати в Telegram
@@ -1231,7 +1274,8 @@ function CreateSheet({
   const [to, setTo] = useState('21:00')
   const [at, setAt] = useState('20:00')
   const [areas, setAreas] = useState<string[]>(profile.areas ?? [])
-  const [venue, setVenue] = useState('')
+  const [venue, setVenue] = useState<Place | null>(null)
+  const [picking, setPicking] = useState(false)
   /** How many people the author is looking for (not counting themselves) */
   const [seats, setSeats] = useState(1)
   const [tags, setTags] = useState<string[]>([])
@@ -1283,7 +1327,7 @@ function CreateSheet({
     if (tags.length === 0) return setError('Обери категорію')
     if (kind === 'person' && to <= from) return setError('Кінець має бути пізніше за початок')
     if (areas.length === 0) return setError('Обери район')
-    if (kind === 'event' && !venue.trim()) return setError('Вкажи місце')
+    if (kind === 'event' && !venue) return setError('Обери місце')
     const finalBio = bio.trim()
     if (finalBio !== profile.bio) onProfile({ ...profile, bio: finalBio })
     track('post_create', { kind, autoTags: auto, manualTags: tags.filter((t) => !auto.includes(t)) })
@@ -1295,7 +1339,13 @@ function CreateSheet({
       time: kind === 'person' ? `${from} - ${to}` : at,
       place: formatAreas(areas),
       areas,
-      venue: kind === 'event' ? venue.trim() : undefined,
+      venue: kind === 'event' ? venue?.name : undefined,
+      ...(kind === 'event' && venue
+        ? {
+            venueAddress: venue.address || undefined,
+            ...(Number.isFinite(venue.lat) ? { lat: venue.lat, lon: venue.lon } : {}),
+          }
+        : {}),
       tags,
       name: 'Ти',
       age: profile.age ?? 0,
@@ -1413,19 +1463,26 @@ function CreateSheet({
 
       {kind === 'event' && (
         <>
-          <label className="dlabel" htmlFor="c-venue">
-            Місце
-          </label>
-          <input
-            id="c-venue"
-            className="dinput"
-            placeholder="Тільки публічне місце: кафе, бар, парк"
-            value={venue}
-            onChange={(e) => {
-              setVenue(e.target.value)
-              setError(null)
-            }}
-          />
+          <p className="dlabel">Місце</p>
+          <button className={venue ? 'place-btn' : 'place-btn empty'} onClick={() => setPicking(true)}>
+            <b>{venue ? `📍 ${venue.name}` : 'Обрати на карті'}</b>
+            <span>{venue ? venue.address || 'Змінити' : 'Кав’ярня, бар, парк: тільки публічні місця'}</span>
+          </button>
+          {picking && (
+            <Suspense fallback={null}>
+              <PlacePicker
+                initial={venue}
+                onClose={() => setPicking(false)}
+                onPick={(p) => {
+                  setVenue(p)
+                  setPicking(false)
+                  setError(null)
+                  // A plan happens at one venue: its district comes from the map when we can tell
+                  if (p.area) setAreas([p.area])
+                }}
+              />
+            </Suspense>
+          )}
           <p className="dlabel">Скільки людей шукаєш</p>
           <div className="dchips" role="radiogroup" aria-label="Скільки людей шукаєш">
             {[1, 2, 3, 4, 5, 6].map((n) => (

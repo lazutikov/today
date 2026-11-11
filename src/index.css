@@ -1922,3 +1922,197 @@ html:has(.screen) body {
 .dtoggle.on .dtoggle-knob::after {
   transform: translateX(18px);
 }
+
+/* ---------- Place picker ---------- */
+
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #ebebeb;
+}
+
+.picker-map {
+  position: absolute;
+  inset: 0;
+}
+
+/* The pin stays in the middle; the map moves under it */
+.picker-pin {
+  position: absolute;
+  left: 50%;
+  /* the tip (bottom corner after rotation) sits exactly on the map centre */
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -41px 0 0 -17px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--f-accent, #fc601e);
+  transform: rotate(-45deg);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.picker-pin::after {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.picker-top {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.picker-top .profile-btn {
+  flex: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.picker-search {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 22px;
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.picker-results {
+  position: absolute;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.picker-results button {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-results button:hover,
+.picker-results button:focus-visible {
+  background: #ebebeb;
+}
+
+.picker-results span,
+.picker-note {
+  font-size: 13px;
+  color: #575757;
+}
+
+.picker-note {
+  padding: 12px 14px;
+}
+
+.picker-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
+  background: #fff;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.picker-locate {
+  position: absolute;
+  top: -56px;
+  right: 14px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 20px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.picker-place {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+}
+
+.picker-place b {
+  font-size: 18px;
+}
+
+.picker-place span,
+.picker-hint {
+  font-size: 13px;
+  color: #575757;
+  margin: 0;
+}
+
+.picker-fallback {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 40%;
+  text-align: center;
+  color: #575757;
+}
+
+/* Place button inside forms */
+.place-btn {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--f-field, #ebebeb);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.place-btn span {
+  font-size: 13px;
+  color: var(--f-muted, #575757);
+}
+
+.place-btn.empty b {
+  font-weight: 500;
+  color: var(--f-muted, #575757);
+}
+
+.dlink-inline {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

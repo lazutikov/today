@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource/manrope": "^5.3.0",
     "@fontsource/unbounded": "^5.3.0",
+    "maplibre-gl": "^6.18.0",
     "posthog-js": "^1.447.12",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
