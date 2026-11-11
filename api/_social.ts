@@ -145,7 +145,7 @@ async function putReq(r: Req) {
 
 function who(r: Req) {
   const parts = [r.from.gender, r.from.age ? String(r.from.age) : ''].filter(Boolean).join(', ')
-  return `${parts || 'Людина'}${r.from.bio ? `: «${esc(r.from.bio)}»` : ''}`
+  return `${parts || 'Стать не вказана'}${r.from.bio ? `: «${esc(r.from.bio)}»` : ''}`
 }
 
 function requestText(r: Req) {

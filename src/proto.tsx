@@ -8,7 +8,8 @@ import { CITY, CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
-import { clearTgUser, inMiniApp, loadSession, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
+import { guessGender } from './gender'
+import { clearTgUser, inMiniApp, loadSession, loadTgUser, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
 import { identify, resetIdentity, track } from './track'
 import {
   answerRequest,
@@ -81,6 +82,13 @@ const FREE_CANCEL_SECONDS = 2 * 60
 
 type Stage = 'connecting' | 'landing' | 'onboarding' | 'app'
 
+/** First visit: pre-select gender from the Telegram name; the person can change it right there. */
+function withGuessedGender(p: Profile): Profile {
+  if (p.gender) return p
+  const guess = guessGender(loadTgUser()?.first_name)
+  return guess ? { ...p, gender: guess } : p
+}
+
 export default function Proto() {
   useEffect(() => {
     const onHash = () => {
@@ -122,7 +130,7 @@ export default function Proto() {
   if (stage === 'onboarding')
     return (
       <Onboarding
-        profile={loadProfile()}
+        profile={withGuessedGender(loadProfile())}
         onDone={(p) => {
           saveProfile(p)
           setSignedIn(true)
@@ -213,12 +221,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       const next = items.find((i) => !seenInbox.current.has(i.id))
       if (!next) return
       seenInbox.current.add(next.id)
-      const who = [next.from.gender, next.from.age || ''].filter(Boolean).join(', ')
+      const who = [next.from.gender || 'Стать не вказана', next.from.age || ''].filter(Boolean).join(', ')
       track('incoming_view', { real: true, kind: next.type })
       setOverlay({
         t: 'incoming',
         inc: {
-          from: { name: next.from.gender || 'Людина', age: next.from.age },
+          from: { name: next.from.gender || 'Стать не вказана', age: next.from.age },
           tag: next.tag,
           place: next.place,
           time: next.time,

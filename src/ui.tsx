@@ -92,7 +92,7 @@ export function TagPill({ tag, size }: { tag: string; size?: 'lg' }) {
 
 /** «Чоловік, 29» — whatever the author chose to show. */
 export function whoLine(card: Pick<FeedCard, 'gender' | 'age'>): string {
-  const parts = [card.gender, card.age ? String(card.age) : null].filter(Boolean)
+  const parts = [card.gender ?? 'Стать не вказана', card.age ? String(card.age) : null].filter(Boolean)
   return parts.join(', ')
 }
 
