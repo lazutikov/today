@@ -1863,3 +1863,62 @@ html:has(.screen) body {
   font-size: 15px;
   font-weight: 600;
 }
+
+/* Switch row in the profile sheet */
+.dtoggle {
+  width: 100%;
+  margin: 18px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--f-field, #ebebeb);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dtoggle-text {
+  display: grid;
+  gap: 2px;
+  font-size: 15px;
+}
+
+.dtoggle-text span {
+  font-size: 13px;
+  color: var(--f-muted, #575757);
+}
+
+.dtoggle-knob {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: #a7a7a7;
+  transition: background 0.2s ease;
+}
+
+.dtoggle-knob::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+
+.dtoggle.on .dtoggle-knob {
+  background: var(--f-accent);
+}
+
+.dtoggle.on .dtoggle-knob::after {
+  transform: translateX(18px);
+}

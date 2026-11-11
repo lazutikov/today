@@ -2,7 +2,8 @@
  * Real posts and requests (invites to people, joins to events), shared by
  * /api/posts, /api/requests and the bot webhook.
  */
-import { contactUrl, esc, kv, kyivDay, mention, secondsToKyivMidnight, signPhoto, tg, type SessionUser } from './_kv.js'
+import { contactUrl, esc, kv, kyivDay, kyivMinutes, mention, secondsToKyivMidnight, signPhoto, tg, type SessionUser } from './_kv.js'
+import { audienceFor } from './_profile.js'
 
 export const ANSWER_SECONDS = 5 * 60
 const TAGS = ['Кава', 'Бар/Ресторан', 'Прогулянка', 'Кіно', 'Спорт', 'Ігри', 'Культура']
@@ -16,6 +17,8 @@ export type Post = {
   place: string
   venue?: string
   tags: string[]
+  /** Districts picked by the author (for "new plan near you") */
+  areas?: string[]
   age: number
   gender?: 'Чоловік' | 'Жінка'
   capacity?: number
@@ -69,6 +72,9 @@ export function cleanPost(input: Record<string, unknown>, user: SessionUser): Po
     place: str(input.place, 160),
     venue: kind === 'event' ? str(input.venue, 120) || undefined : undefined,
     tags,
+    areas: Array.isArray(input.areas)
+      ? input.areas.filter((a): a is string => typeof a === 'string' && a.length <= 40).slice(0, 3)
+      : [],
     age: Number.isFinite(age) && age > 0 && age < 100 ? Math.round(age) : 0,
     gender,
     // Author + 1..6 people they are looking for
@@ -93,6 +99,7 @@ export function publicCard(p: Post, viewerId: number | null) {
     place: p.place,
     venue: p.venue,
     tags: p.tags,
+    areas: p.areas ?? [],
     name: '',
     age: p.age,
     gender: p.gender,
@@ -455,4 +462,58 @@ export async function cancelMeeting(id: string, userId: number, uncomfortable: b
     text: `${me.first_name} скасував(ла) зустріч «${r.postHeadline}» (${r.place}, ${r.time}). Шкода. У стрічці є ще люди, вільні сьогодні.`,
   })
   return { ok: true }
+}
+
+/* ---------- "New plan near you" pings from the bot ---------- */
+
+export const PINGS_PER_DAY = 2
+const QUIET_FROM = 23 * 60
+const QUIET_TO = 9 * 60
+
+const toMin = (t: string) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t.trim())
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
+
+/** A post is still worth pinging about until its (end) time has passed. */
+export function stillAhead(time: string, now = kyivMinutes()): boolean {
+  const parts = time.split('-').map((x) => toMin(x))
+  const end = parts[parts.length - 1] ?? parts[0]
+  return end === null || end === undefined ? true : end > now
+}
+
+export function quietNow(now = kyivMinutes()): boolean {
+  return now >= QUIET_FROM || now < QUIET_TO
+}
+
+/** Tells people in the post's districts about it. Returns how many were messaged. */
+export async function pingNearby(p: Post, site: string): Promise<number> {
+  if (quietNow() || !stillAhead(p.time)) return 0
+  const audience = (await audienceFor(p.city, p.areas ?? [])).filter((id) => id !== p.authorId)
+  const who = [p.gender ?? 'Стать не вказана', p.age ? String(p.age) : ''].filter(Boolean).join(', ')
+  const head = p.kind === 'person' ? '🙋 <b>Хтось вільний сьогодні поруч</b>' : '🎯 <b>Новий план поруч</b>'
+  const where = p.kind === 'event' && p.venue ? `${esc(p.venue)}, ${esc(p.place)}` : esc(p.place)
+  const text = `${head}\n\n«${esc(p.headline)}»\n${esc(who)}${p.bio ? `: «${esc(p.bio)}»` : ''}\n📍 ${where} · 🕐 ${esc(p.time)}`
+  const day = kyivDay()
+  let sent = 0
+  await Promise.all(
+    audience.map(async (uid) => {
+      const n = Number(await kv('INCR', `pings:${uid}:${day}`))
+      if (n === 1) await kv('EXPIRE', `pings:${uid}:${day}`, 2 * 86400)
+      if (n > PINGS_PER_DAY) return
+      const r = await tg('sendMessage', {
+        chat_id: uid,
+        text,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Подивитися', web_app: { url: `${site}/app?post=${p.id}` } }],
+            [{ text: 'Не надсилати такі', callback_data: 'mute' }],
+          ],
+        },
+      })
+      if (r.ok) sent++
+    }),
+  )
+  return sent
 }

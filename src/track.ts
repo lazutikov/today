@@ -87,6 +87,8 @@ export type EventName =
   | 'incoming_view'
   | 'age_hint'
   | 'notifs_open'
+  | 'profile_restored'
+  | 'deep_link'
   | 'notif_tap'
   | 'login_error'
 

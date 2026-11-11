@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto'
 import { CODE_RE, CODE_TTL, json, kv, kvReady, tg } from './_kv.js'
 import { answerReq } from './_social.js'
+import { setNotify } from './_profile.js'
 
 export function webhookSecret(token: string) {
   return createHash('sha256').update(`today-webhook:${token}`).digest('hex').slice(0, 48)
@@ -30,6 +31,15 @@ export async function POST(request: Request): Promise<Response> {
 
   // "Так" / "Ні" under an invite or join request
   const cb = update.callback_query
+  if (cb?.data === 'mute') {
+    await setNotify(cb.from.id, false)
+    await tg('answerCallbackQuery', {
+      callback_query_id: cb.id,
+      text: 'Більше не надсилатиму. Увімкнути можна в профілі today.',
+      show_alert: true,
+    })
+    return json({ ok: true })
+  }
   if (cb?.data?.startsWith('r:')) {
     const [, id, a] = cb.data.split(':')
     const res = await answerReq(id, cb.from.id, a === 'y')

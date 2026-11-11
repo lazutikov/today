@@ -17,10 +17,15 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T
 }
 
-/** Onboarding hints from the Telegram profile (age from the birthday, if visible). */
-export async function fetchMe(): Promise<{ age: number | null }> {
-  const r = await api<{ ok: boolean; age?: number | null }>('/api/me')
-  return { age: r.ok ? (r.age ?? null) : null }
+/** Saved profile (any device) plus an age hint from the Telegram birthday. */
+export async function fetchMe(): Promise<{ profile: (Profile & { updatedAt?: number }) | null; age: number | null }> {
+  const r = await api<{ ok: boolean; profile?: (Profile & { updatedAt?: number }) | null; age?: number | null }>('/api/me')
+  return r.ok ? { profile: r.profile ?? null, age: r.age ?? null } : { profile: null, age: null }
+}
+
+export async function saveProfileRemote(p: Profile, city: string) {
+  if (!isLive()) return
+  await api('/api/me', { method: 'POST', body: JSON.stringify({ ...p, city }) })
 }
 
 export type Meeting = {

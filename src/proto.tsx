@@ -10,6 +10,7 @@ import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
 import { guessGender } from './gender'
 import { NotificationsPage } from './notifications'
+import { rankFeed } from './rank'
 import { clearTgUser, inMiniApp, loadSession, loadTgUser, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
 import { identify, resetIdentity, track } from './track'
 import {
@@ -17,7 +18,9 @@ import {
   cancelMeetingApi,
   createPost,
   fetchMeetings,
+  fetchMe,
   fetchNotifs,
+  saveProfileRemote,
   markNotifsSeen,
   type Notif,
   fetchInbox,
@@ -120,7 +123,7 @@ export default function Proto() {
       .then((user) => {
         identify(String(user.id), { username: user.username, first_name: user.first_name })
         track('login_success', { real: true, via: 'mini_app' })
-        setStage('onboarding')
+        afterLogin()
       })
       .catch((e) => {
         track('login_error', { reason: e instanceof Error ? e.message : 'unknown', via: 'mini_app' })
@@ -128,6 +131,21 @@ export default function Proto() {
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /** Known person on a new device: restore their profile from the server and skip onboarding. */
+  function afterLogin() {
+    setStage('connecting')
+    fetchMe()
+      .then(({ profile }) => {
+        if (profile && profile.areas?.length) {
+          saveProfile({ bio: profile.bio, areas: profile.areas, gender: profile.gender, age: profile.age, notify: profile.notify })
+          setSignedIn(true)
+          track('profile_restored')
+          setStage('app')
+        } else setStage('onboarding')
+      })
+      .catch(() => setStage('onboarding'))
+  }
 
   if (stage === 'connecting')
     return (
@@ -137,13 +155,14 @@ export default function Proto() {
       </div>
     )
 
-  if (stage === 'landing') return <Landing onSignedIn={() => setStage('onboarding')} />
+  if (stage === 'landing') return <Landing onSignedIn={afterLogin} />
   if (stage === 'onboarding')
     return (
       <Onboarding
         profile={withGuessedGender(loadProfile())}
         onDone={(p) => {
           saveProfile(p)
+          saveProfileRemote(p, CITY)
           setSignedIn(true)
           setStage('app')
         }}
@@ -263,9 +282,30 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   /* ----- real feed and incoming requests (polling) ----- */
   const seenInbox = useRef(new Set<string>())
+  const deepLink = useRef(new URLSearchParams(location.search).get('post'))
+  useEffect(() => {
+    const id = deepLink.current
+    if (!id) return
+    const card = realPosts.find((c) => c.id === id)
+    if (!card) return
+    deepLink.current = null
+    history.replaceState(null, '', location.pathname + location.hash)
+    track('deep_link', { kind: card.kind })
+    setTab(card.kind === 'person' ? 'people' : 'events')
+    setOverlay({ t: 'detail', card })
+  }, [realPosts])
   useEffect(() => {
     if (!live) return
     refreshPosts()
+    fetchMe().then(({ profile: remote }) => {
+      if (!remote) {
+        saveProfileRemote(loadProfile(), CITY) // first time on the server: upload what this device has
+        return
+      }
+      const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify }
+      setProfile(next)
+      saveProfile(next)
+    })
     // Poll only while the app is on screen: a hidden tab costs nothing (free Redis has a monthly quota).
     const visible = () => document.visibilityState === 'visible'
     const feed = window.setInterval(() => visible() && refreshPosts(), 30000)
@@ -462,9 +502,10 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }
 
   const updateProfile = (next: Profile) => {
-    track('profile_save', { hasBio: Boolean(next.bio) })
+    track('profile_save', { hasBio: Boolean(next.bio), notify: next.notify !== false })
     setProfile(next)
     saveProfile(next)
+    saveProfileRemote(next, CITY)
     // Own posts show the profile bio, so refresh them too.
     const patch = (l: FeedCard[]) =>
       l.map((c) => (c.mine ? { ...c, bio: next.bio, gender: next.gender, age: next.age ?? 0 } : c))
@@ -533,10 +574,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     setTab(next)
   }
 
-  const cards =
+  const cards = rankFeed(
     tab === 'people'
       ? [...realPosts.filter((c) => c.kind === 'person'), ...people]
-      : [...realPosts.filter((c) => c.kind === 'event'), ...events]
+      : [...realPosts.filter((c) => c.kind === 'event'), ...events],
+    profile.areas,
+  )
 
   return (
     <div className="screen">
@@ -1107,6 +1150,9 @@ function ProfileSheet({
     gender: profile.gender,
     age: profile.age,
   })
+  const [areas, setAreas] = useState<string[]>(profile.areas ?? [])
+  const [notify, setNotify] = useState(profile.notify !== false)
+  const [error, setError] = useState<string | null>(null)
   return (
     <DarkSheet title="Профіль" onClose={onClose}>
       <p className="dtext dsmall">
@@ -1135,7 +1181,30 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
-      <button className="dbtn" onClick={() => onSave({ ...profile, ...ga, bio: bio.trim() })}>
+      <p className="dlabel">
+        Мої райони <span className="dopt">до {MAX_AREAS}</span>
+      </p>
+      <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
+      {error && <p className="derror">{error}</p>}
+      <button
+        className={notify ? 'dtoggle on' : 'dtoggle'}
+        role="switch"
+        aria-checked={notify}
+        onClick={() => setNotify(!notify)}
+      >
+        <span className="dtoggle-text">
+          <b>Нові плани поруч</b>
+          <span>Бот напише, коли хтось у твоїх районах шукає компанію. Не частіше 2 разів на день.</span>
+        </span>
+        <span className="dtoggle-knob" aria-hidden="true" />
+      </button>
+      <button
+        className="dbtn"
+        onClick={() => {
+          if (areas.length === 0) return setError('Обери хоча б один район')
+          onSave({ ...profile, ...ga, bio: bio.trim(), areas, notify })
+        }}
+      >
         Зберегти
       </button>
       <button className="dlink" onClick={onSignOut}>
@@ -1225,6 +1294,7 @@ function CreateSheet({
       bio: finalBio,
       time: kind === 'person' ? `${from} - ${to}` : at,
       place: formatAreas(areas),
+      areas,
       venue: kind === 'event' ? venue.trim() : undefined,
       tags,
       name: 'Ти',

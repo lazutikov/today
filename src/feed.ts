@@ -25,6 +25,8 @@ export type FeedCard = {
   mine?: boolean
   /** Posted by a real person through the server (answers are real too) */
   real?: boolean
+  /** Districts as picked (the card shows them joined in `place`) */
+  areas?: string[]
   /** Real free-time post that already has a match (author's view) */
   matched?: boolean
 }

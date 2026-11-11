@@ -72,6 +72,11 @@ export function kyivDay(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date())
 }
 
+/** Minutes since local midnight in Kyiv (0..1439). */
+export function kyivMinutes(): number {
+  return Math.floor((86400 - secondsToKyivMidnight()) / 60)
+}
+
 export function secondsToKyivMidnight(): number {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Kyiv',

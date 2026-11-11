@@ -8,6 +8,8 @@ export type Profile = {
   areas?: string[]
   gender?: 'Чоловік' | 'Жінка'
   age?: number
+  /** Bot may message about new plans in my districts (on unless turned off) */
+  notify?: boolean
 }
 
 const KEY = 'today.profile'

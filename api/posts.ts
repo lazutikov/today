@@ -4,7 +4,7 @@
  *  DELETE /api/posts?id=...      remove your post
  */
 import { json, kvReady, readJson, readSession } from './_kv.js'
-import { cleanPost, deletePost, listPosts, publicCard, savePost } from './_social.js'
+import { cleanPost, deletePost, listPosts, pingNearby, publicCard, savePost } from './_social.js'
 
 export async function GET(request: Request): Promise<Response> {
   if (!kvReady) return json({ ok: false, error: 'not_configured' }, 503)
@@ -22,7 +22,8 @@ export async function POST(request: Request): Promise<Response> {
   const post = body && cleanPost(body, user)
   if (!post) return json({ ok: false, error: 'bad_post' }, 400)
   await savePost(post)
-  return json({ ok: true, post: publicCard(post, user.id) })
+  const pinged = await pingNearby(post, `https://${request.headers.get('host')}`).catch(() => 0)
+  return json({ ok: true, post: publicCard(post, user.id), pinged })
 }
 
 export async function DELETE(request: Request): Promise<Response> {
