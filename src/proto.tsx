@@ -645,7 +645,7 @@ function DetailSheet({
 }) {
   const left = (card.capacity ?? 0) - (card.taken ?? 0)
   return (
-    <DarkSheet title={card.kind === 'person' ? 'Вільний час' : 'Подія'} onClose={onClose}>
+    <DarkSheet title={card.kind === 'person' ? 'Покличте мене' : 'Кличу з собою'} onClose={onClose}>
       <div className="dsheet-card">
         <CardView card={card} />
       </div>
@@ -657,14 +657,14 @@ function DetailSheet({
       ) : card.kind === 'person' ? (
         <>
           <button className="dbtn" onClick={onInvite}>
-            Запросити
+            Покликати
           </button>
           <p className="dhint">Ім’я та фото побачиш після того, як людина скаже «Так».</p>
         </>
       ) : (
         <>
           <button className="dbtn" onClick={onJoin} disabled={left <= 0}>
-            {left > 0 ? `Я йду · ще ${left} ${left === 1 ? 'місце' : 'місця'}` : 'Місць немає'}
+            {left > 0 ? `Я з вами · ще ${left} ${left === 1 ? 'місце' : 'місця'}` : 'Місць немає'}
           </button>
           <p className="dhint">Організатор підтвердить запит, і відкриється чат.</p>
         </>
@@ -711,7 +711,7 @@ function InviteSheet({
   }
 
   return (
-    <DarkSheet title="Запросити" onClose={onClose}>
+    <DarkSheet title="Покликати" onClose={onClose}>
       <p className="dlabel">Куди</p>
       <div className="dchips">
         {suggestions.map((s) => (
@@ -844,7 +844,7 @@ function MatchSheet({
             {p.name}, {p.age}
           </p>
           <p className="dtext dsmall">
-            {match.source === 'event' ? 'Організатор події' : 'Зустріч підтверджено'}
+            {match.source === 'event' ? 'Автор плану' : 'Зустріч підтверджено'}
           </p>
         </div>
       </div>
@@ -1085,7 +1085,7 @@ function CreateSheet({
           className={kind === 'person' ? 'on' : ''}
           onClick={() => switchKind('person')}
         >
-          Я вільний
+          Покличте мене
         </button>
         <button
           role="tab"
@@ -1093,12 +1093,12 @@ function CreateSheet({
           className={kind === 'event' ? 'on' : ''}
           onClick={() => switchKind('event')}
         >
-          Подія
+          Кличу з собою
         </button>
       </div>
 
       <label className="dlabel" htmlFor="c-headline">
-        {kind === 'person' ? 'Що хочеш сьогодні?' : 'Що за подія?'}
+        {kind === 'person' ? 'Що хочеш сьогодні?' : 'Який план?'}
       </label>
       <textarea
         id="c-headline"
@@ -1145,7 +1145,7 @@ function CreateSheet({
         </p>
       )}
 
-      <p className="dlabel">{kind === 'person' ? 'Коли вільний' : 'Коли'}</p>
+      <p className="dlabel">{kind === 'person' ? 'Коли можеш' : 'Коли'}</p>
       {kind === 'person' ? (
         <div className="drow">
           <select className="dinput" aria-label="З" value={from} onChange={(e) => setFrom(e.target.value)}>
@@ -1282,14 +1282,14 @@ function FeedEnd({
         size="sm"
         lines={[
           { text: 'поки тихо', tag: 'Спорт' },
-          { text: kind === 'people' ? 'будь першим' : 'створи подію', tag: 'Ігри' },
+          { text: kind === 'people' ? 'будь першим' : 'поклич з собою', tag: 'Ігри' },
         ]}
       />
       <p className="feed-end-text">
         Більше нікого{where} на сьогодні. Напиши, що хочеш, і люди побачать твій план першим.
       </p>
       <button className="dbtn" onClick={onCreate}>
-        {kind === 'people' ? 'Я вільний сьогодні' : 'Створити подію'}
+        {kind === 'people' ? 'Покличте мене' : 'Кличу з собою'}
       </button>
     </div>
   )

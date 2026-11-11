@@ -151,7 +151,7 @@ export function Dock({
           className={tab === 'events' ? 'seg on' : 'seg'}
           onClick={() => onTab('events')}
         >
-          Події
+          Плани
         </button>
         <button
           role="tab"
@@ -161,7 +161,7 @@ export function Dock({
           className={tab === 'people' ? 'seg on' : 'seg'}
           onClick={() => onTab('people')}
         >
-          Люди
+          Вільні
         </button>
       </div>
       <button className="fab" aria-label="Створити пост" onClick={onCreate}>
