@@ -7,6 +7,7 @@ import {
   prepareBotLogin,
   telegramEnabled,
   telegramLogin,
+  botFromCode,
   waitForBotLogin,
   type BotLogin,
   type TgUser,
@@ -41,8 +42,22 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
 
   useEffect(() => {
     track('landing_view')
-    prepareBotLogin().then(setBot)
+    const params = new URLSearchParams(location.search)
+    const fromSite = params.get('login')
+    if (fromSite && /^[a-f0-9]{32}$/.test(fromSite)) {
+      // Came from the site's button: Telegram is already open, just wait for Start.
+      params.delete('login')
+      history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : '') + location.hash)
+      const b = botFromCode(fromSite)
+      if (b) {
+        setBot(b)
+        startWaiting(b)
+      }
+    } else {
+      prepareBotLogin().then(setBot)
+    }
     return () => abort.current?.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const done = (user: TgUser, via: string) => {
@@ -51,14 +66,10 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
     onSignedIn()
   }
 
-  const signInWithBot = () => {
-    if (!bot) return
-    track('login_start', { from: 'landing', via: 'bot' })
-    window.open(bot.link, '_blank', 'noopener')
-    if (waiting) return
+  const startWaiting = (b: BotLogin) => {
     setWaiting(true)
     abort.current = new AbortController()
-    waitForBotLogin(bot.code, abort.current.signal)
+    waitForBotLogin(b.code, abort.current.signal)
       .then((user) => done(user, 'bot'))
       .catch((e) => {
         if (e instanceof Error && e.message === 'aborted') return
@@ -66,6 +77,13 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         setWaiting(false)
         prepareBotLogin().then(setBot)
       })
+  }
+
+  const signInWithBot = () => {
+    if (!bot) return
+    track('login_start', { from: 'landing', via: 'bot' })
+    window.open(bot.link, '_blank', 'noopener')
+    if (!waiting) startWaiting(bot)
   }
 
   const signIn = async () => {

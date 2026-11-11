@@ -130,6 +130,11 @@ export async function prepareBotLogin(): Promise<BotLogin | null> {
   return { code, link: `https://t.me/${BOT_NAME}?start=login_${code}` }
 }
 
+/** Rebuilds the bot link for a code registered elsewhere (the site's button). */
+export function botFromCode(code: string): BotLogin | null {
+  return BOT_NAME ? { code, link: `https://t.me/${BOT_NAME}?start=login_${code}` } : null
+}
+
 /** Polls until the user taps Start in the bot. Rejects on expiry or abort. */
 export function waitForBotLogin(code: string, signal: AbortSignal): Promise<TgUser> {
   return new Promise((resolve, reject) => {
