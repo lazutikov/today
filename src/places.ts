@@ -39,6 +39,27 @@ const LVIV_AREAS: [RegExp, string][] = [
   [/залізничн/i, 'Залізничний'],
 ]
 
+// Rough centres of Lviv districts: when the address has no district, the nearest centre decides.
+const LVIV_CENTRES: [string, number, number][] = [
+  ['Центр', 49.8415, 24.0315],
+  ['Франківський', 49.8235, 23.9985],
+  ['Личаківський', 49.8335, 24.0705],
+  ['Сихівський', 49.7935, 24.0555],
+  ['Шевченківський', 49.8695, 24.0255],
+  ['Залізничний', 49.8390, 23.9720],
+]
+
+export function nearestArea(lat: number, lon: number): string | undefined {
+  if (CITY !== 'lviv' || !Number.isFinite(lat)) return undefined
+  const k = Math.cos((lat * Math.PI) / 180) // lon degrees are shorter at this latitude
+  let best: [string, number] | null = null
+  for (const [name, la, lo] of LVIV_CENTRES) {
+    const d = (lat - la) ** 2 + ((lon - lo) * k) ** 2
+    if (!best || d < best[1]) best = [name, d]
+  }
+  return best?.[0]
+}
+
 function toPlace(f: Feature): Place {
   const p = f.properties
   const street = [p.street, p.housenumber].filter(Boolean).join(', ')
@@ -47,8 +68,10 @@ function toPlace(f: Feature): Place {
     .filter(Boolean)
     .join(', ')
   const text = [p.district, p.locality, p.county].filter(Boolean).join(' ')
-  const area = CITY === 'lviv' ? LVIV_AREAS.find(([re]) => re.test(text))?.[1] : undefined
-  return { name, address, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], area }
+  const lat = f.geometry.coordinates[1]
+  const lon = f.geometry.coordinates[0]
+  const area = CITY === 'lviv' ? (LVIV_AREAS.find(([re]) => re.test(text))?.[1] ?? nearestArea(lat, lon)) : undefined
+  return { name, address, lat, lon, area }
 }
 
 export async function searchPlaces(q: string, signal?: AbortSignal): Promise<Place[]> {
@@ -66,7 +89,9 @@ export async function placeAt(lat: number, lon: number, signal?: AbortSignal): P
   const body = (await res.json()) as { features: Feature[] }
   const f = body.features[0]
   // Keep the exact pin, take only the naming from the nearest object
-  return f ? { ...toPlace(f), lat, lon } : { name: 'Точка на карті', address: '', lat, lon }
+  return f
+    ? { ...toPlace(f), lat, lon }
+    : { name: 'Точка на карті', address: '', lat, lon, area: nearestArea(lat, lon) }
 }
 
 /** Opens directions in whatever maps app the phone has. */

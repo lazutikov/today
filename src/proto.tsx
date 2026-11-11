@@ -1348,7 +1348,7 @@ function CreateSheet({
   const switchKind = (k: 'person' | 'event') => {
     setKind(k)
     setError(null)
-    if (k === 'event') setAreas(areas.slice(0, 1))
+    if (k === 'event') setAreas(venue?.area ? [venue.area] : [])
     else if (areas.length <= 1 && profile.areas?.length) setAreas(profile.areas)
     applyText(headline, k, k === 'event' ? tags.slice(0, 1) : tags, auto)
   }
@@ -1357,7 +1357,8 @@ function CreateSheet({
     if (!headline.trim()) return setError('Напиши кілька слів про план')
     if (tags.length === 0) return setError('Обери категорію')
     if (kind === 'person' && to <= from) return setError('Кінець має бути пізніше за початок')
-    if (areas.length === 0) return setError('Обери район')
+    if (kind === 'event' && !venue) return setError('Обери місце')
+    if (areas.length === 0) return setError(kind === 'event' ? 'Не вдалося визначити район, обери його' : 'Обери район')
     if (kind === 'event' && !venue) return setError('Обери місце')
     const finalBio = bio.trim()
     if (finalBio !== profile.bio) onProfile({ ...profile, bio: finalBio })
@@ -1478,19 +1479,24 @@ function CreateSheet({
         </select>
       )}
 
-      <p className="dlabel">
-        {kind === 'person' ? 'Райони' : 'Район'}{' '}
-        <span className="dopt">{kind === 'person' ? `до ${MAX_AREAS}` : 'один'}</span>
-      </p>
-      <AreaPicker
-        value={areas}
-        multi={kind === 'person'}
-        onChange={(next) => {
-          setAreas(next)
-          setError(null)
-        }}
-        onError={setError}
-      />
+      {/* A plan has a venue: its district comes from the map. Free time has no place yet: pick districts. */}
+      {(kind === 'person' || (venue && !venue.area)) && (
+        <>
+          <p className="dlabel">
+            {kind === 'person' ? 'Райони' : 'Район'}{' '}
+            <span className="dopt">{kind === 'person' ? `до ${MAX_AREAS}` : 'не вдалося визначити за місцем'}</span>
+          </p>
+          <AreaPicker
+            value={areas}
+            multi={kind === 'person'}
+            onChange={(next) => {
+              setAreas(next)
+              setError(null)
+            }}
+            onError={setError}
+          />
+        </>
+      )}
 
       {kind === 'event' && (
         <>
@@ -1499,6 +1505,7 @@ function CreateSheet({
             <b>{venue ? `📍 ${venue.name}` : 'Обрати на карті'}</b>
             <span>{venue ? venue.address || 'Змінити' : 'Кав’ярня, бар, парк: тільки публічні місця'}</span>
           </button>
+          {venue?.area && <p className="dhint dhint-left">Район: {venue.area}, визначили за місцем</p>}
           {picking && (
             <Suspense fallback={null}>
               <PlacePicker
