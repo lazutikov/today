@@ -8,7 +8,7 @@ import { CITY, CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
-import { clearTgUser, inMiniApp, miniAppLogin, setupMiniApp } from './telegram'
+import { clearTgUser, inMiniApp, loadSession, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
 import { identify, resetIdentity, track } from './track'
 import {
   answerRequest,
@@ -88,7 +88,9 @@ export default function Proto() {
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
-  const [stage, setStage] = useState<Stage>(() => (isSignedIn() ? 'app' : inMiniApp ? 'connecting' : 'landing'))
+  // On the real site a sign-in without a server session (made before the shared feed) doesn't count.
+  const signedIn = () => isSignedIn() && (!telegramEnabled || Boolean(loadSession()))
+  const [stage, setStage] = useState<Stage>(() => (signedIn() ? 'app' : inMiniApp ? 'connecting' : 'landing'))
 
   useEffect(() => {
     setupMiniApp()
@@ -353,7 +355,9 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     }
     setOverlay({ t: 'posted', card })
 
-    // Simulated incoming invite / join request.
+    // Simulated incoming invite / join request: demo preview only. On the real site
+    // a person's own post is answered by real people or not at all.
+    if (telegramEnabled) return
     const who = INVITERS.find((i) => card.tags.includes(i.tag)) ?? INVITERS[0]
     later(7000, () => {
       const inc: Incoming =
