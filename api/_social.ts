@@ -203,6 +203,36 @@ export async function markNotifsSeen(userId: number) {
 
 const base = (r: Req) => ({ reqId: r.id, postId: r.postId, post: r.postHeadline, tag: r.tag, place: r.place, time: r.time })
 
+/* ---------- Double booking ---------- */
+
+/** Meetings closer than this (start to start) can't both happen. */
+export const CLASH_MINUTES = 90
+
+const startMin = (t: string) => {
+  const m = /(\d{1,2}):(\d{2})/.exec(t)
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
+
+/** Another confirmed meeting of this person at about the same time (a different plan). */
+export async function clashFor(userId: number, time: string, postId: string): Promise<Req | null> {
+  const at = startMin(time)
+  if (at === null) return null
+  const ids = (await kv('ZRANGE', `matches:${userId}`, 0, -1)) as string[]
+  for (const id of ids) {
+    const r = await getReq(id)
+    if (!r || r.status !== 'yes' || r.postId === postId) continue
+    const other = startMin(r.time)
+    if (other !== null && Math.abs(other - at) < CLASH_MINUTES) return r
+  }
+  return null
+}
+
+/** "о 19:30 з Андрієм" for the person who would double-book */
+export function clashText(r: Req, viewerId: number) {
+  const other = r.from.id === viewerId ? r.to : r.from
+  return `У тебе вже є зустріч о ${r.time}: ${other.first_name}, «${r.postHeadline}». Скасуй її або обери інший час.`
+}
+
 /* ---------- Requests ---------- */
 
 export async function getReq(id: string): Promise<Req | null> {
@@ -236,10 +266,13 @@ export async function createReq(
   user: SessionUser,
   post: Post,
   input: { place?: string; time?: string; gender?: string; age?: number; bio?: string; lat?: number; lon?: number; address?: string },
-): Promise<{ ok: true; req: Req } | { ok: false; error: string }> {
+): Promise<{ ok: true; req: Req } | { ok: false; error: string; message?: string }> {
   if (post.authorId === user.id) return { ok: false, error: 'own_post' }
   if (post.matched) return { ok: false, error: 'taken' }
   if (post.kind === 'event' && (post.taken ?? 0) >= (post.capacity ?? 2)) return { ok: false, error: 'full' }
+  const wantTime = post.kind === 'event' ? post.time : str(input.time, 20) || post.time
+  const mine = await clashFor(user.id, wantTime, post.id)
+  if (mine) return { ok: false, error: 'conflict', message: clashText(mine, user.id) }
   const busy = await kv('SET', `outgoing:${user.id}`, 'x', 'EX', ANSWER_SECONDS, 'NX')
   if (busy === null) return { ok: false, error: 'busy' }
 
@@ -313,12 +346,22 @@ export async function answerReq(
   userId: number,
   yes: boolean,
   reason?: string,
-): Promise<{ ok: boolean; status?: Req['status']; error?: string }> {
+): Promise<{ ok: boolean; status?: Req['status']; error?: string; message?: string }> {
   let r = await getReq(id)
   if (!r) return { ok: false, error: 'not_found' }
   if (r.to.id !== userId) return { ok: false, error: 'forbidden' }
   r = await settleExpiry(r)
   if (r.status !== 'pending') return { ok: false, status: r.status, error: 'already' }
+
+  if (yes) {
+    const authorBusy = await clashFor(r.to.id, r.time, r.postId)
+    if (authorBusy) return { ok: false, error: 'conflict', message: clashText(authorBusy, r.to.id) }
+    const requesterBusy = await clashFor(r.from.id, r.time, r.postId)
+    if (requesterBusy) {
+      await answerReq(id, userId, false, 'зайнято')
+      return { ok: false, error: 'they_busy', message: 'Ця людина вже має зустріч на цей час. Запит закрито.' }
+    }
+  }
 
   r.status = yes ? 'yes' : 'no'
   if (reason) r.reason = str(reason, 60)

@@ -43,14 +43,16 @@ export async function POST(request: Request): Promise<Response> {
   if (cb?.data?.startsWith('r:')) {
     const [, id, a] = cb.data.split(':')
     const res = await answerReq(id, cb.from.id, a === 'y')
-    const note = res.ok
+    const note = res.message
+      ? res.message
+      : res.ok
       ? a === 'y'
         ? 'Є матч! Контакт надіслано'
         : 'Відмову надіслано'
       : res.status === 'expired'
         ? 'Час на відповідь вийшов'
         : 'На це вже відповіли'
-    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: note })
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: note, show_alert: Boolean(res.message) })
     return json({ ok: true })
   }
 

@@ -367,6 +367,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         own_post: 'Це твій пост',
         post_gone: 'Цей план уже неактуальний',
         taken: 'Ця людина вже знайшла компанію на сьогодні',
+        conflict: res.message ?? 'У тебе вже є зустріч на цей час',
       }
       setOverlay(null)
       say(msg[res.error] ?? 'Не вийшло надіслати, спробуй ще раз')
@@ -417,8 +418,29 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   const busyWaiting = overlay?.t === 'waiting' || overlay?.t === 'joining'
 
+  /** Another meeting today starting within 1.5 h of this time (the same plan doesn't count). */
+  const clash = (time: string, sameAs?: (m: Match) => boolean) => {
+    const toMin = (t: string) => {
+      const x = /(\d{1,2}):(\d{2})/.exec(t)
+      return x ? Number(x[1]) * 60 + Number(x[2]) : null
+    }
+    const at = toMin(time)
+    if (at === null) return null
+    return (
+      matches.find((m) => {
+        if (m.cancelled || sameAs?.(m)) return false
+        const t = toMin(m.time)
+        return t !== null && Math.abs(t - at) < 90
+      }) ?? null
+    )
+  }
+  const clashSay = (m: Match) =>
+    say(`У тебе вже є зустріч о ${m.time}: ${m.with[0].name}. Скасуй її або обери інший час`)
+
   /* ----- outgoing invite to a person ----- */
   const sendInvite = (card: FeedCard, place: string, time: string, geo?: Place) => {
+    const busy = clash(time)
+    if (busy) return clashSay(busy)
     track('invite_send', { card: card.id, place, time, real: Boolean(card.real), onMap: Boolean(geo) })
     setOverlay({ t: 'waiting', card, place, time })
     if (card.real) {
@@ -446,6 +468,11 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   /* ----- joining an event ----- */
   const joinEvent = (card: FeedCard) => {
+    const busy = clash(card.time)
+    if (busy) {
+      setOverlay(null)
+      return clashSay(busy)
+    }
     track('join_request', { card: card.id, real: Boolean(card.real) })
     setOverlay({ t: 'joining', card })
     if (card.real) return void realRequest(card, {})
@@ -778,12 +805,16 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <IncomingSheet
           inc={overlay.inc}
           onYes={async () => {
+            const busy = clash(overlay.inc.time)
+            if (busy) return clashSay(busy)
             track('incoming_answer', { yes: true, real: Boolean(overlay.inc.reqId) })
             if (overlay.inc.reqId) {
               const inc = overlay.inc
               const r = await answerRequest(inc.reqId!, true)
               if (!r.ok || !r.match) {
+                if (r.error === 'conflict') return say(r.message ?? 'У тебе вже є зустріч на цей час')
                 setOverlay(null)
+                if (r.message) return say(r.message)
                 return say(r.status === 'expired' ? 'Час на відповідь вийшов' : 'На це вже відповіли')
               }
               refreshPosts()

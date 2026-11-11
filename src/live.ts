@@ -116,7 +116,7 @@ export async function sendRequest(
   postId: string,
   extra: { place?: string; time?: string; lat?: number; lon?: number; address?: string },
   profile: Profile,
-): Promise<{ ok: true; request: ReqStatus } | { ok: false; error: string }> {
+): Promise<{ ok: true; request: ReqStatus } | { ok: false; error: string; message?: string }> {
   return api('/api/requests', {
     method: 'POST',
     body: JSON.stringify({ postId, ...extra, bio: profile.bio, gender: profile.gender, age: profile.age }),
@@ -148,6 +148,6 @@ export async function answerRequest(
   id: string,
   yes: boolean,
   reason?: string,
-): Promise<{ ok: boolean; status?: string; match?: ReqStatus['match'] }> {
+): Promise<{ ok: boolean; status?: string; error?: string; message?: string; match?: ReqStatus['match'] }> {
   return api('/api/requests', { method: 'POST', body: JSON.stringify({ id, answer: yes ? 'yes' : 'no', reason }) })
 }
