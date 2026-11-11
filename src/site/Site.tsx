@@ -1,6 +1,5 @@
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import { CITY, CITY_NAME, EVENTS, PEOPLE, TAG_COLORS } from '../feed'
-import { miniAppLink } from '../telegram'
 import { track } from '../track'
 import { CardView, TagPill } from '../ui'
 import bowling from './img/bowling.jpg'
@@ -17,8 +16,7 @@ const PROTOTYPE_URL =
     ? './app'
     : 'https://claude.ai/artifact/Wo3hscHojHcfzK9qLQKna6') + (CITY === 'warsaw' ? '#warsaw' : '')
 
-// With a bot configured, CTAs open the Mini App: Telegram signs the user in, no phone number.
-const CTA_URL = miniAppLink(CITY) ?? PROTOTYPE_URL
+const CTA_URL = PROTOTYPE_URL
 
 const PLACE = CITY === 'lviv' ? 'Проспект Свободи' : 'Plac Zbawiciela'
 

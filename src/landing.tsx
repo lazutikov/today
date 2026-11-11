@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react'
-import { CITY_NAME, MAX_AREAS } from './feed'
+import { useEffect, useRef, useState } from 'react'
+import { CITY, CITY_NAME, MAX_AREAS } from './feed'
 import selfie from './site/img/selfie.jpg'
 import type { Profile } from './profile'
-import { miniAppLink, telegramEnabled, telegramLogin } from './telegram'
-import { CITY } from './feed'
+import {
+  miniAppLink,
+  prepareBotLogin,
+  telegramEnabled,
+  telegramLogin,
+  waitForBotLogin,
+  type BotLogin,
+  type TgUser,
+} from './telegram'
 import { identify, track } from './track'
 import { AreaPicker, GenderAge, Sticker } from './ui'
 
@@ -26,22 +33,48 @@ const RULES = [
 
 export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
   const [loading, setLoading] = useState(false)
+  // Bot sign-in: code is registered up front so the click can open Telegram synchronously.
+  const [bot, setBot] = useState<BotLogin | null>(null)
+  const [waiting, setWaiting] = useState(false)
+  const abort = useRef<AbortController | null>(null)
   const tgLink = miniAppLink(CITY)
 
   useEffect(() => {
     track('landing_view')
+    prepareBotLogin().then(setBot)
+    return () => abort.current?.abort()
   }, [])
+
+  const done = (user: TgUser, via: string) => {
+    if (telegramEnabled) identify(String(user.id), { username: user.username, first_name: user.first_name })
+    track('login_success', { real: telegramEnabled, via })
+    onSignedIn()
+  }
+
+  const signInWithBot = () => {
+    if (!bot) return
+    track('login_start', { from: 'landing', via: 'bot' })
+    window.open(bot.link, '_blank', 'noopener')
+    if (waiting) return
+    setWaiting(true)
+    abort.current = new AbortController()
+    waitForBotLogin(bot.code, abort.current.signal)
+      .then((user) => done(user, 'bot'))
+      .catch((e) => {
+        if (e instanceof Error && e.message === 'aborted') return
+        track('login_error', { reason: e instanceof Error ? e.message : 'unknown', via: 'bot' })
+        setWaiting(false)
+        prepareBotLogin().then(setBot)
+      })
+  }
 
   const signIn = async () => {
     track('login_start', { from: 'landing', via: 'widget' })
     setLoading(true)
     try {
-      const user = await telegramLogin()
-      if (telegramEnabled) identify(String(user.id), { username: user.username, first_name: user.first_name })
-      track('login_success', { real: telegramEnabled })
-      onSignedIn()
+      done(await telegramLogin(), 'widget')
     } catch (e) {
-      track('login_error', { reason: e instanceof Error ? e.message : 'unknown' })
+      track('login_error', { reason: e instanceof Error ? e.message : 'unknown', via: 'widget' })
       setLoading(false)
     }
   }
@@ -84,7 +117,33 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       </main>
 
       <div className="landing-cta">
-        {tgLink ? (
+        {bot ? (
+          <>
+            <button className="dbtn tg-btn" onClick={signInWithBot} aria-busy={waiting}>
+              {waiting ? (
+                <>
+                  <span className="btn-spinner" aria-hidden="true" /> Чекаємо на Start у Telegram…
+                </>
+              ) : (
+                <>
+                  <TelegramIcon /> Увійти через Telegram
+                </>
+              )}
+            </button>
+            <p className="landing-fine" aria-live="polite">
+              {waiting ? (
+                <>
+                  Натисни Start у боті й повертайся сюди.{' '}
+                  <button className="link-btn" onClick={signInWithBot}>
+                    Відкрити Telegram ще раз
+                  </button>
+                </>
+              ) : (
+                'Без пароля і номера телефону: один тап у Telegram.'
+              )}
+            </p>
+          </>
+        ) : tgLink ? (
           <>
             <a className="dbtn tg-btn" href={tgLink} onClick={() => track('login_start', { from: 'landing', via: 'mini_app' })}>
               <TelegramIcon /> Відкрити в Telegram

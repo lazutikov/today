@@ -108,6 +108,71 @@ export async function telegramLogin(): Promise<TgUser> {
   return body.user
 }
 
+/* ---------- Sign-in through the bot (site, no phone number) ---------- */
+
+export type BotLogin = { code: string; link: string }
+
+/** Registers a one-time code. Null when the server has no storage yet (then use the widget). */
+export async function prepareBotLogin(): Promise<BotLogin | null> {
+  if (!BOT_NAME) return null
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const code = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    if (!res.ok) return null
+  } catch {
+    return null
+  }
+  return { code, link: `https://t.me/${BOT_NAME}?start=login_${code}` }
+}
+
+/** Polls until the user taps Start in the bot. Rejects on expiry or abort. */
+export function waitForBotLogin(code: string, signal: AbortSignal): Promise<TgUser> {
+  return new Promise((resolve, reject) => {
+    let timer = 0
+    const check = async () => {
+      if (signal.aborted) return reject(new Error('aborted'))
+      try {
+        const res = await fetch(`/api/login?code=${code}`, { cache: 'no-store' })
+        const body = await res.json()
+        if (body.ok) {
+          cleanup()
+          saveTgUser(body.user)
+          return resolve(body.user)
+        }
+        if (res.status === 410) {
+          cleanup()
+          return reject(new Error('expired'))
+        }
+      } catch {
+        /* network blip: keep polling */
+      }
+      timer = window.setTimeout(check, 1500)
+    }
+    // Coming back from Telegram: check right away instead of waiting for the next tick.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        window.clearTimeout(timer)
+        check()
+      }
+    }
+    const cleanup = () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    signal.addEventListener('abort', () => {
+      cleanup()
+      reject(new Error('aborted'))
+    })
+    check()
+  })
+}
+
 export function loadTgUser(): TgUser | null {
   try {
     const raw = localStorage.getItem(USER_KEY)
