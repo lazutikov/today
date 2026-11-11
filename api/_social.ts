@@ -254,12 +254,29 @@ function who(r: Req) {
   return `${parts || 'Стать не вказана'}${r.from.bio ? `: «${esc(r.from.bio)}»` : ''}`
 }
 
+/** "вулиця Городоцька, 25, Галицький район, Львів" → "вул. Городоцька, 25" */
+export function shortAddr(address?: string): string {
+  if (!address) return ''
+  const parts = address
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p && !/район|львів|lviv|україна|ukraine|середмістя/i.test(p))
+  const s = (parts[1] && /^\d/.test(parts[1]) ? `${parts[0]}, ${parts[1]}` : parts[0]) ?? ''
+  return s.replace(/^вулиця /i, 'вул. ').replace(/^площа /i, 'пл. ').replace(/^проспект /i, 'просп. ')
+}
+
+/** 📍 Львівська копальня кави · пл. Ринок, 10 / 🕐 19:30 */
+function whereWhen(place: string, address: string | undefined, time: string) {
+  const a = shortAddr(address)
+  return `📍 ${esc(place)}${a ? ` · ${esc(a)}` : ''}\n🕐 ${esc(time)}`
+}
+
 function requestText(r: Req) {
   const head =
     r.type === 'invite'
       ? `🔔 <b>Запрошення</b> на твій план «${esc(r.postHeadline)}»`
       : `🙋 <b>Хоче приєднатися</b> до «${esc(r.postHeadline)}»`
-  return `${head}\n\n${who(r)}\n📍 ${esc(r.place)} · 🕐 ${esc(r.time)}\n\nУ тебе 5 хвилин на відповідь. Ім’я й контакт ви побачите після «Так».`
+  return `${head}\n\n${who(r)}\n${whereWhen(r.place, r.address, r.time)}\n\nУ тебе 5 хвилин на відповідь. Ім’я й контакт ви побачите після «Так».`
 }
 
 export async function createReq(
@@ -391,7 +408,7 @@ export async function answerReq(
     await notify(r.from.id, { ...base(r), type: 'declined', who: '' })
   }
 
-  const where = `📍 ${esc(r.place)} · 🕐 ${esc(r.time)}`
+  const where = whereWhen(r.place, r.address, r.time)
   if (r.authorMsgId)
     await tg('editMessageText', {
       chat_id: r.to.id,
@@ -442,6 +459,7 @@ export function reqStatusView(r: Req) {
             contact: contactUrl(r.to),
             photo: signPhoto(r.to.id, r.from.id),
             place: r.place,
+            address: shortAddr(r.address),
             time: r.time,
             tag: r.tag,
             lat: r.lat,
@@ -459,6 +477,7 @@ export function inboxView(r: Req) {
     post: r.postHeadline,
     tag: r.tag,
     place: r.place,
+    address: shortAddr(r.address),
     time: r.time,
     from: { gender: r.from.gender ?? null, age: r.from.age ?? 0, bio: r.from.bio ?? '' },
     expiresAt: r.expiresAt,
@@ -472,6 +491,7 @@ export function matchViewForAuthor(r: Req) {
     contact: contactUrl(r.from),
     photo: signPhoto(r.from.id, r.to.id),
     place: r.place,
+    address: shortAddr(r.address),
     time: r.time,
     tag: r.tag,
     lat: r.lat,
@@ -493,6 +513,7 @@ export function meetingView(r: Req, viewerId: number) {
     photo: signPhoto(other.id, viewerId),
     tag: r.tag,
     place: r.place,
+    address: shortAddr(r.address),
     time: r.time,
     lat: r.lat,
     lon: r.lon,
@@ -569,8 +590,11 @@ export async function pingNearby(p: Post, site: string): Promise<number> {
   const audience = (await audienceFor(p.city, p.areas ?? [])).filter((id) => id !== p.authorId)
   const who = [p.gender ?? 'Стать не вказана', p.age ? String(p.age) : ''].filter(Boolean).join(', ')
   const head = p.kind === 'person' ? '🙋 <b>Хтось вільний сьогодні поруч</b>' : '🎯 <b>Новий план поруч</b>'
-  const where = p.kind === 'event' && p.venue ? `${esc(p.venue)}, ${esc(p.place)}` : esc(p.place)
-  const text = `${head}\n\n«${esc(p.headline)}»\n${esc(who)}${p.bio ? `: «${esc(p.bio)}»` : ''}\n📍 ${where} · 🕐 ${esc(p.time)}`
+  const where =
+    p.kind === 'event' && p.venue
+      ? whereWhen(p.venue, [p.areas?.[0], shortAddr(p.venueAddress)].filter(Boolean).join(', '), p.time)
+      : whereWhen(p.place, undefined, p.time)
+  const text = `${head}\n\n«${esc(p.headline)}»\n${esc(who)}${p.bio ? `: «${esc(p.bio)}»` : ''}\n${where}`
   const day = kyivDay()
   let sent = 0
   await Promise.all(

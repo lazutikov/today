@@ -36,6 +36,7 @@ export type Meeting = {
   photo: string
   tag: string
   place: string
+  address?: string
   time: string
   post: string
   source: 'invite' | 'event' | 'incoming'
@@ -105,6 +106,7 @@ export type ReqStatus = {
     contact: string
     photo?: string
     place: string
+    address?: string
     time: string
     tag: string
     lat?: number
@@ -134,6 +136,7 @@ export type InboxItem = {
   post: string
   tag: string
   place: string
+  address?: string
   time: string
   from: { gender: string | null; age: number; bio: string }
   expiresAt: number

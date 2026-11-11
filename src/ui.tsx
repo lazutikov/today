@@ -113,6 +113,27 @@ export function whoLine(card: Pick<FeedCard, 'gender' | 'age'>): string {
   return parts.join(', ')
 }
 
+/** "вулиця Городоцька, 25, Галицький район, Львів" → "вул. Городоцька, 25" */
+export function shortAddress(address?: string): string {
+  if (!address) return ''
+  const parts = address
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p && !/район|львів|lviv|україна|ukraine|середмістя/i.test(p))
+  const short = (parts[1] && /^\d/.test(parts[1]) ? `${parts[0]}, ${parts[1]}` : parts[0]) ?? ''
+  return short
+    .replace(/^вулиця /i, 'вул. ')
+    .replace(/^площа /i, 'пл. ')
+    .replace(/^проспект /i, 'просп. ')
+    .replace(/^провулок /i, 'пров. ')
+}
+
+/** «Центр · вул. Городоцька, 25» under the venue name */
+export function placeLine(card: Pick<FeedCard, 'areas' | 'place' | 'venueAddress'>): string {
+  const area = card.areas?.[0] ?? card.place.split(',')[0]
+  return [area, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
+}
+
 /* ---------- Card (Figma "Frame 20") ---------- */
 
 export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void }) {
@@ -128,11 +149,26 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
           {who && <p className="fcard-who">{who}</p>}
         </div>
       )}
-      <p className="fcard-when">
-        <span>{card.time}</span>
-        <span className="fcard-dot" aria-hidden="true" />
-        <span>{card.place}</span>
-      </p>
+      <div className="fcard-meta">
+        <p className="fcard-row">
+          <ClockIcon />
+          <span>{card.time}</span>
+        </p>
+        {card.kind === 'event' && card.venue ? (
+          <div className="fcard-row">
+            <PinIcon />
+            <div>
+              <p className="fcard-venue">{card.venue}</p>
+              <p className="fcard-addr">{placeLine(card)}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="fcard-row">
+            <PinIcon />
+            <span>{card.place}</span>
+          </p>
+        )}
+      </div>
       <p className="fcard-pills">
         {card.tags.map((t) => (
           <TagPill key={t} tag={t} />

@@ -43,6 +43,9 @@ import {
   type Tab,
   TagPill,
   BellIcon,
+  ClockIcon,
+  shortAddress,
+  PinIcon,
   UserIcon,
   useCountdown,
 } from './ui'
@@ -60,6 +63,7 @@ type Match = {
   /** Real matches: server request id, link that opens a chat with the person, and their Telegram photo */
   reqId?: string
   /** Meeting point, when picked on the map */
+  address?: string
   lat?: number
   lon?: number
   /** The other person cancelled: shown as a grey notice until dismissed */
@@ -77,6 +81,8 @@ type Incoming = {
   kind: 'invite' | 'join'
   /** Headline of the post this request answers */
   post: string
+  /** Short street address of the place, if known */
+  address?: string
   /** Real requests: server id and deadline */
   reqId?: string
   expiresAt?: number
@@ -255,6 +261,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         with: [{ name: m.name, age: m.age }],
         tag: m.tag,
         place: m.place,
+        address: m.address,
         time: m.time,
         source: m.source,
         contact: m.contact,
@@ -336,6 +343,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           from: { name: next.from.gender || 'Стать не вказана', age: next.from.age },
           tag: next.tag,
           place: next.place,
+          address: next.address,
           time: next.time,
           note: [who, next.from.bio].filter(Boolean).join(': ') || 'Без опису',
           kind: next.type,
@@ -387,6 +395,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           with: [{ name: st.match.name, age: card.age }],
           tag: st.match.tag,
           place: st.match.place,
+          address: st.match.address,
           time: st.match.time,
           source: card.kind === 'event' ? 'event' : 'invite',
           contact: st.match.contact,
@@ -485,6 +494,9 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         with: [{ name: card.name, age: card.age }],
         tag: card.tags[0],
         place: card.venue ?? card.place,
+        address: shortAddress(card.venueAddress),
+        lat: card.lat,
+        lon: card.lon,
         time: card.time,
         source: 'event',
       })
@@ -823,6 +835,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
                 with: [{ name: r.match.name, age: inc.from.age }],
                 tag: inc.tag,
                 place: inc.place,
+                address: inc.address,
                 time: inc.time,
                 source: 'incoming',
                 contact: r.match.contact,
@@ -870,6 +883,25 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
 /* ---------- Sheets ---------- */
 
+/** Place name, short address and time with icons (incoming request, match) */
+function PlaceRows({ place, address, time }: { place: string; address?: string; time: string }) {
+  return (
+    <div className="fcard-meta">
+      <div className="fcard-row">
+        <PinIcon />
+        <div>
+          <p className="fcard-venue">{place}</p>
+          {address && <p className="fcard-addr">{address}</p>}
+        </div>
+      </div>
+      <p className="fcard-row">
+        <ClockIcon />
+        <span>{time}</span>
+      </p>
+    </div>
+  )
+}
+
 function DetailSheet({
   card,
   onClose,
@@ -889,19 +921,10 @@ function DetailSheet({
       <div className="dsheet-card">
         <CardView card={card} />
       </div>
-      {card.kind === 'event' && card.venue && (
-        <p className="dtext dsmall">
-          Місце: {card.venue}
-          {card.venueAddress ? `, ${card.venueAddress}` : ''}
-          {card.lat !== undefined && card.lon !== undefined && (
-            <>
-              {' · '}
-              <a className="dlink-inline" href={mapsLink({ lat: card.lat, lon: card.lon })} target="_blank" rel="noopener">
-                на карті
-              </a>
-            </>
-          )}
-        </p>
+      {card.lat !== undefined && card.lon !== undefined && (
+        <a className="route-link" href={mapsLink({ lat: card.lat, lon: card.lon })} target="_blank" rel="noopener">
+          Маршрут
+        </a>
       )}
       {card.mine ? (
         <button className="dbtn dbtn-ghost" onClick={onDelete}>
@@ -1116,17 +1139,12 @@ function MatchSheet({
         <p>
           <TagPill tag={match.tag} size="lg" />
         </p>
-        <p className="match-place">
-          {match.place}
-          {match.lat !== undefined && match.lon !== undefined && (
-            <>
-              {' · '}
-              <a className="dlink-inline" href={mapsLink({ lat: match.lat, lon: match.lon })} target="_blank" rel="noopener">
-                маршрут
-              </a>
-            </>
-          )}
-        </p>
+        <PlaceRows place={match.place} address={match.address} time={`Сьогодні о ${match.time}`} />
+        {match.lat !== undefined && match.lon !== undefined && (
+          <a className="route-link" href={mapsLink({ lat: match.lat, lon: match.lon })} target="_blank" rel="noopener">
+            Маршрут
+          </a>
+        )}
       </div>
       <button className="dbtn" onClick={onTelegram}>
         Написати в Telegram
@@ -1165,8 +1183,7 @@ function IncomingSheet({
         <p>
           <TagPill tag={inc.tag} />
         </p>
-        <p>{inc.place}</p>
-        <p>Сьогодні о {inc.time}</p>
+        <PlaceRows place={inc.place} address={inc.address} time={`Сьогодні о ${inc.time}`} />
       </div>
       <p className="quote">«{inc.note}»</p>
       <p className="dtext dsmall">

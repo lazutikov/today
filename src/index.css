@@ -2223,3 +2223,107 @@ html:has(.screen) body {
   text-align: right;
   margin-top: 4px;
 }
+
+/* Venue block on plan cards: name, then district · short address */
+.fcard-place {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 8px 0 2px;
+}
+
+.fcard-place .ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  color: var(--f-accent);
+}
+
+.fcard-venue {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.fcard-addr {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--f-muted, #575757);
+}
+
+/* Time and place rows with icons, always stacked */
+.fcard .fcard-meta,
+.dsheet .fcard-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+
+.fcard-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.fcard-row > .ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1.5px;
+  color: var(--f-accent);
+}
+
+.fcard-row .fcard-venue {
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.route-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--f-field, #ebebeb);
+  color: var(--f-text, #000);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.route-link::before {
+  content: '↗';
+}
+
+/* On the dark match sheet the venue reads in full white, the address softer */
+.dsheet-dark .fcard-venue {
+  color: #fff;
+}
+
+.dsheet-dark .fcard-addr,
+.dsheet-dark .fcard-row span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.dsheet-dark .route-link {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.fcard .fcard-row,
+.dsheet:not(.dsheet-dark) .fcard-row {
+  color: var(--f-text, #000);
+}
+
+.fcard .fcard-venue,
+.dsheet:not(.dsheet-dark) .fcard-venue {
+  color: var(--f-text, #000);
+}
