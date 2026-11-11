@@ -781,7 +781,6 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'create' && (
         <CreateSheet
           profile={profile}
-          onProfile={updateProfile}
           onClose={() => setOverlay(null)}
           onPublish={publish}
         />
@@ -1290,12 +1289,10 @@ function ProfileSheet({
 
 function CreateSheet({
   profile,
-  onProfile,
   onClose,
   onPublish,
 }: {
   profile: Profile
-  onProfile: (p: Profile) => void
   onClose: () => void
   onPublish: (card: FeedCard) => void
 }) {
@@ -1314,8 +1311,8 @@ function CreateSheet({
   const [auto, setAuto] = useState<string[]>([])
   /** Auto tags the person removed: never re-add them */
   const [removed, setRemoved] = useState<string[]>([])
-  const [editBio, setEditBio] = useState(!profile.bio)
-  const [bio, setBio] = useState(profile.bio)
+  // The post shows the profile's «про себе»; it's edited in the profile, not here.
+  const bio = profile.bio
   const [error, setError] = useState<string | null>(null)
   const maxTags = kind === 'person' ? 4 : 1
 
@@ -1361,7 +1358,6 @@ function CreateSheet({
     if (areas.length === 0) return setError(kind === 'event' ? 'Не вдалося визначити район, обери його' : 'Обери район')
     if (kind === 'event' && !venue) return setError('Обери місце')
     const finalBio = bio.trim()
-    if (finalBio !== profile.bio) onProfile({ ...profile, bio: finalBio })
     track('post_create', { kind, autoTags: auto, manualTags: tags.filter((t) => !auto.includes(t)) })
     onPublish({
       id: `mine-${Date.now()}`,
@@ -1536,30 +1532,6 @@ function CreateSheet({
             ))}
           </div>
         </>
-      )}
-
-      {editBio ? (
-        <>
-          <label className="dlabel" htmlFor="c-bio">
-            Про себе <span className="dopt">збережемо в профіль</span>
-          </label>
-          <input
-            id="c-bio"
-            className="dinput"
-            maxLength={80}
-            placeholder="Одним рядком: хто ти"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-          />
-        </>
-      ) : (
-        <div className="bio-line">
-          <UserIcon />
-          <span>{bio}</span>
-          <button className="dlink dlink-inline" onClick={() => setEditBio(true)}>
-            Змінити
-          </button>
-        </div>
       )}
 
       {error && (
