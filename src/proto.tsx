@@ -596,6 +596,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             />
           </li>
         ))}
+        {cards.length === 0 && (
         <li>
           <FeedEnd
             area={profile.areas?.[0]}
@@ -603,6 +604,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             onCreate={() => setOverlay({ t: 'create' })}
           />
         </li>
+        )}
       </ul>
 
       <Dock tab={tab} onTab={switchTab} onCreate={() => setOverlay({ t: 'create' })} />
