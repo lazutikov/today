@@ -7,8 +7,8 @@ import { CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENU
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
-import { clearTgUser } from './telegram'
-import { resetIdentity, track } from './track'
+import { clearTgUser, inMiniApp, miniAppLogin, setupMiniApp } from './telegram'
+import { identify, resetIdentity, track } from './track'
 import {
   AreaPicker,
   CardView,
@@ -62,15 +62,42 @@ type Overlay =
 const ANSWER_SECONDS = 5 * 60
 const FREE_CANCEL_SECONDS = 2 * 60
 
-type Stage = 'landing' | 'onboarding' | 'app'
+type Stage = 'connecting' | 'landing' | 'onboarding' | 'app'
 
 export default function Proto() {
   useEffect(() => {
-    const onHash = () => location.reload()
+    const onHash = () => {
+      if (!inMiniApp) location.reload()
+    }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
-  const [stage, setStage] = useState<Stage>(() => (isSignedIn() ? 'app' : 'landing'))
+  const [stage, setStage] = useState<Stage>(() => (isSignedIn() ? 'app' : inMiniApp ? 'connecting' : 'landing'))
+
+  useEffect(() => {
+    setupMiniApp()
+    if (stage !== 'connecting') return
+    track('login_start', { from: 'mini_app', via: 'mini_app' })
+    miniAppLogin()
+      .then((user) => {
+        identify(String(user.id), { username: user.username, first_name: user.first_name })
+        track('login_success', { real: true, via: 'mini_app' })
+        setStage('onboarding')
+      })
+      .catch((e) => {
+        track('login_error', { reason: e instanceof Error ? e.message : 'unknown', via: 'mini_app' })
+        setStage('landing')
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (stage === 'connecting')
+    return (
+      <div className="screen connecting" aria-busy="true">
+        <span className="btn-spinner" aria-hidden="true" />
+        <span>Підключаємо Telegram…</span>
+      </div>
+    )
 
   if (stage === 'landing') return <Landing onSignedIn={() => setStage('onboarding')} />
   if (stage === 'onboarding')

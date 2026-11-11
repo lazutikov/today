@@ -17,6 +17,8 @@ export async function POST(request: Request): Promise<Response> {
     return json({ ok: false, error: 'bad_json' }, 400)
   }
 
+  if (typeof data.initData === 'string') return verifyMiniApp(data.initData, token)
+
   const { hash, ...fields } = data
   if (typeof hash !== 'string') return json({ ok: false, error: 'no_hash' }, 400)
 
@@ -43,6 +45,38 @@ export async function POST(request: Request): Promise<Response> {
       username: fields.username ?? null,
       photo_url: fields.photo_url ?? null,
     },
+  })
+}
+
+/** https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app */
+function verifyMiniApp(initData: string, token: string): Response {
+  const params = new URLSearchParams(initData)
+  const hash = params.get('hash')
+  if (!hash) return json({ ok: false, error: 'no_hash' }, 400)
+  params.delete('hash')
+  const checkString = [...params.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n')
+  const secret = createHmac('sha256', 'WebAppData').update(token).digest()
+  const expected = createHmac('sha256', secret).update(checkString).digest('hex')
+
+  const a = Buffer.from(expected, 'hex')
+  const b = Buffer.from(hash, 'hex')
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return json({ ok: false, error: 'bad_hash' }, 401)
+
+  const age = Date.now() / 1000 - Number(params.get('auth_date'))
+  if (!(age < MAX_AGE_SECONDS)) return json({ ok: false, error: 'expired' }, 401)
+
+  let u: Record<string, unknown> = {}
+  try {
+    u = JSON.parse(params.get('user') || '{}')
+  } catch {
+    return json({ ok: false, error: 'bad_user' }, 400)
+  }
+  return json({
+    ok: true,
+    user: { id: u.id, first_name: u.first_name, username: u.username ?? null, photo_url: u.photo_url ?? null },
   })
 }
 

@@ -17,6 +17,10 @@ if (PH_KEY && typeof window !== 'undefined') {
       persistence: 'localStorage',
     })
     phReady = true
+    const inTelegram = Boolean(
+      (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData,
+    )
+    posthog.register({ entry: inTelegram ? 'telegram' : 'site' })
   } catch {
     /* analytics must never break the UI */
   }

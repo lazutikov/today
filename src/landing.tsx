@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { CITY_NAME, MAX_AREAS } from './feed'
 import selfie from './site/img/selfie.jpg'
 import type { Profile } from './profile'
-import { telegramEnabled, telegramLogin } from './telegram'
+import { miniAppLink, telegramEnabled, telegramLogin } from './telegram'
+import { CITY } from './feed'
 import { identify, track } from './track'
 import { AreaPicker, GenderAge, Sticker } from './ui'
 
@@ -25,13 +26,14 @@ const RULES = [
 
 export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
   const [loading, setLoading] = useState(false)
+  const tgLink = miniAppLink(CITY)
 
   useEffect(() => {
     track('landing_view')
   }, [])
 
   const signIn = async () => {
-    track('login_start', { from: 'landing' })
+    track('login_start', { from: 'landing', via: 'widget' })
     setLoading(true)
     try {
       const user = await telegramLogin()
@@ -82,20 +84,36 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       </main>
 
       <div className="landing-cta">
-        <button className="dbtn tg-btn" onClick={signIn} disabled={loading} aria-busy={loading}>
-          {loading ? (
-            <>
-              <span className="btn-spinner" aria-hidden="true" /> Підключаємо Telegram…
-            </>
-          ) : (
-            <>
-              <TelegramIcon /> Увійти через Telegram
-            </>
-          )}
-        </button>
-        <p className="landing-fine">
-          Без пароля і номера телефону. Писатимемо тільки про запрошення й плани поруч.
-        </p>
+        {tgLink ? (
+          <>
+            <a className="dbtn tg-btn" href={tgLink} onClick={() => track('login_start', { from: 'landing', via: 'mini_app' })}>
+              <TelegramIcon /> Відкрити в Telegram
+            </a>
+            <p className="landing-fine">
+              Відкриється прямо в Telegram, вхід автоматичний.{' '}
+              <button className="link-btn" onClick={signIn} disabled={loading}>
+                {loading ? 'Підключаємо…' : 'Або увійти тут, у браузері'}
+              </button>
+            </p>
+          </>
+        ) : (
+          <>
+            <button className="dbtn tg-btn" onClick={signIn} disabled={loading} aria-busy={loading}>
+              {loading ? (
+                <>
+                  <span className="btn-spinner" aria-hidden="true" /> Підключаємо Telegram…
+                </>
+              ) : (
+                <>
+                  <TelegramIcon /> Увійти через Telegram
+                </>
+              )}
+            </button>
+            <p className="landing-fine">
+              Без пароля і номера телефону. Писатимемо тільки про запрошення й плани поруч.
+            </p>
+          </>
+        )}
       </div>
     </div>
   )

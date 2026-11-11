@@ -1,5 +1,6 @@
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import { CITY, CITY_NAME, EVENTS, PEOPLE, TAG_COLORS } from '../feed'
+import { miniAppLink } from '../telegram'
 import { track } from '../track'
 import { CardView, TagPill } from '../ui'
 import bowling from './img/bowling.jpg'
@@ -15,6 +16,9 @@ const PROTOTYPE_URL =
   (import.meta.env.VITE_POSTHOG_KEY || import.meta.env.VITE_TG_BOT_ID
     ? './app'
     : 'https://claude.ai/artifact/Wo3hscHojHcfzK9qLQKna6') + (CITY === 'warsaw' ? '#warsaw' : '')
+
+// With a bot configured, CTAs open the Mini App: Telegram signs the user in, no phone number.
+const CTA_URL = miniAppLink(CITY) ?? PROTOTYPE_URL
 
 const PLACE = CITY === 'lviv' ? 'Проспект Свободи' : 'Plac Zbawiciela'
 
@@ -33,7 +37,7 @@ function TelegramIcon() {
 
 function Cta({ where, children }: { where: string; children?: ReactNode }) {
   return (
-    <a className="w-cta" href={PROTOTYPE_URL} onClick={() => track('login_start', { from: where })}>
+    <a className="w-cta" href={CTA_URL} onClick={() => track('login_start', { from: where })}>
       <TelegramIcon />
       {children ?? 'Увійти через Telegram'}
     </a>
@@ -177,7 +181,7 @@ export default function Site() {
           <a href="#safety">Безпека</a>
           <a href="#faq">Питання</a>
         </div>
-        <a className="w-nav-cta" href={PROTOTYPE_URL} onClick={() => track('login_start', { from: 'nav' })}>
+        <a className="w-nav-cta" href={CTA_URL} onClick={() => track('login_start', { from: 'nav' })}>
           Спробувати
         </a>
       </nav>

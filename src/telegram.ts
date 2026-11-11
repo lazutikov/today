@@ -7,9 +7,67 @@
 export type TgUser = { id: number; first_name: string; username: string | null; photo_url: string | null }
 
 const BOT_ID = import.meta.env.VITE_TG_BOT_ID as string | undefined
+const BOT_NAME = import.meta.env.VITE_TG_BOT_NAME as string | undefined
 const USER_KEY = 'today.tgUser'
 
+/** t.me link that opens the prototype inside Telegram, already signed in. Null without a bot. */
+export function miniAppLink(city: string): string | null {
+  return BOT_NAME ? `https://t.me/${BOT_NAME}?startapp=${city}` : null
+}
+
 export const telegramEnabled = Boolean(BOT_ID)
+
+type WebApp = {
+  initData: string
+  initDataUnsafe?: { start_param?: string }
+  ready: () => void
+  expand: () => void
+  setHeaderColor?: (c: string) => void
+  setBackgroundColor?: (c: string) => void
+  disableVerticalSwipes?: () => void
+}
+
+/** Telegram's Mini App object, only when the page is really opened inside Telegram. */
+export function miniApp(): WebApp | null {
+  try {
+    const wa = (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp
+    return wa && wa.initData ? wa : null
+  } catch {
+    return null
+  }
+}
+
+export const inMiniApp = Boolean(miniApp())
+
+/** Call once on start inside Telegram: full height, light chrome, no swipe-to-close fighting our sheets. */
+export function setupMiniApp() {
+  const wa = miniApp()
+  if (!wa) return
+  try {
+    wa.ready()
+    wa.expand()
+    wa.setHeaderColor?.('#EBEBEB')
+    wa.setBackgroundColor?.('#EBEBEB')
+    wa.disableVerticalSwipes?.()
+  } catch {
+    /* older Telegram clients lack some methods */
+  }
+}
+
+/** Inside Telegram the user is already known: the server only checks the signature. */
+export async function miniAppLogin(): Promise<TgUser> {
+  const wa = miniApp()
+  if (!wa) throw new Error('not_mini_app')
+  const res = await fetch('/api/auth', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ initData: wa.initData }),
+  })
+  const body = await res.json()
+  if (!body.ok) throw new Error(body.error || 'auth_failed')
+  saveTgUser(body.user)
+  return body.user
+}
 
 type Widget = { Login: { auth: (o: Record<string, unknown>, cb: (u: Record<string, unknown> | false) => void) => void } }
 

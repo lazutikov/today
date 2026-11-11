@@ -30,7 +30,9 @@ export type City = 'warsaw' | 'lviv'
 /** City comes from the link: …/#warsaw switches to Warsaw, Lviv by default. */
 export const CITY: City = (() => {
   try {
-    return location.hash.replace('#', '') === 'warsaw' ? 'warsaw' : 'lviv'
+    const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { start_param?: string } } } }).Telegram
+    const fromTelegram = tg?.WebApp?.initDataUnsafe?.start_param
+    return location.hash.replace('#', '') === 'warsaw' || fromTelegram === 'warsaw' ? 'warsaw' : 'lviv'
   } catch {
     return 'lviv'
   }

@@ -1556,3 +1556,34 @@ html:has(.screen) body {
 .landing .dinput-age {
   background: #fff;
 }
+
+/* Mini App: short wait while Telegram's signature is checked */
+.screen.connecting {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-weight: 600;
+  color: #575757;
+}
+
+.screen.connecting .btn-spinner {
+  border-color: rgba(0, 0, 0, 0.15);
+  border-top-color: #000;
+}
+
+.landing-cta a.tg-btn {
+  text-decoration: none;
+}
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
