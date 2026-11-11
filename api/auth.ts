@@ -49,7 +49,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 /** https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app */
-function verifyMiniApp(initData: string, token: string): Response {
+async function verifyMiniApp(initData: string, token: string): Promise<Response> {
   const params = new URLSearchParams(initData)
   const hash = params.get('hash')
   if (!hash) return json({ ok: false, error: 'no_hash' }, 400)
