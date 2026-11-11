@@ -25,6 +25,7 @@ export default function PlacePicker({
   const [results, setResults] = useState<Place[]>([])
   const [searchError, setSearchError] = useState(false)
   const [mapError, setMapError] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
   const skipReverse = useRef(Boolean(initial))
 
   // Map
@@ -110,9 +111,15 @@ export default function PlacePicker({
   }
 
   const locateMe = () => {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => map.current?.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 }),
-      () => {},
+    const fail = () => setNote('Не вдалося визначити, де ти. Знайди місце через пошук або посунь карту.')
+    if (!navigator.geolocation) return fail()
+    setNote('Шукаю, де ти…')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setNote(null)
+        map.current?.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 })
+      },
+      fail,
       { enableHighAccuracy: true, timeout: 8000 },
     )
   }
@@ -175,7 +182,7 @@ export default function PlacePicker({
             <b>{resolving ? 'Шукаю, що тут…' : (place?.name ?? 'Посунь карту до місця')}</b>
             {!resolving && place?.address && <span>{place.address}</span>}
           </div>
-          <p className="picker-hint">Тільки публічні місця: кав’ярні, бари, парки.</p>
+          <p className="picker-hint" aria-live="polite">{note ?? 'Тільки публічні місця: кав’ярні, бари, парки.'}</p>
           <button className="dbtn" disabled={!place || resolving} onClick={() => place && onPick(place)}>
             Обрати це місце
           </button>
