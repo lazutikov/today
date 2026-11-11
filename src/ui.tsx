@@ -178,7 +178,7 @@ export function Dock({
           className={tab === 'people' ? 'seg on' : 'seg'}
           onClick={() => onTab('people')}
         >
-          Вільні
+          Люди
         </button>
       </div>
       <button className="fab" onClick={onCreate}>
