@@ -428,7 +428,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     <div className="screen">
       <header className="screen-head screen-head-row">
         <div className="wordmark">
-          today <span className="proto-tag">прототип, {CITY_NAME}</span>
+          today <span className="proto-tag">{live ? 'наживо' : 'демо'}, {CITY_NAME}</span>
         </div>
         <button
           className="profile-btn"
