@@ -17,6 +17,12 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T
 }
 
+/** Onboarding hints from the Telegram profile (age from the birthday, if visible). */
+export async function fetchMe(): Promise<{ age: number | null }> {
+  const r = await api<{ ok: boolean; age?: number | null }>('/api/me')
+  return { age: r.ok ? (r.age ?? null) : null }
+}
+
 export async function fetchPosts(city: string): Promise<FeedCard[]> {
   const r = await api<{ ok: boolean; posts?: FeedCard[] }>(`/api/posts?city=${city}`)
   return r.ok && r.posts ? r.posts : []

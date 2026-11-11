@@ -14,6 +14,7 @@ import {
 } from './telegram'
 import { identify, track } from './track'
 import { AreaPicker, GenderAge, Sticker } from './ui'
+import { fetchMe, isLive } from './live'
 
 function TelegramIcon() {
   return (
@@ -249,6 +250,16 @@ export function Onboarding({
     age: profile.age,
   })
   const [error, setError] = useState<string | null>(null)
+
+  // Age from the Telegram birthday, if they set one with a year and it's visible to the bot.
+  useEffect(() => {
+    if (profile.age || !isLive()) return
+    fetchMe().then(({ age }) => {
+      if (age) setGa((cur) => (cur.age ? cur : { ...cur, age }))
+      track('age_hint', { found: Boolean(age) })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const submit = () => {
     if (areas.length === 0) return setError('Обери хоча б один район, щоб бачити людей поруч')
