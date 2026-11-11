@@ -1,9 +1,10 @@
 /**
  * Pick a place like in a taxi app: the pin stays in the middle, the map moves
- * under it; search with suggestions on top. Map: MapLibre + OpenFreeMap tiles.
+ * under it; search with suggestions on top. Map: Leaflet + CARTO light tiles
+ * (plain images, no WebGL or workers, so it works on any phone).
  */
-import 'maplibre-gl/dist/maplibre-gl.css'
-import * as maplibregl from 'maplibre-gl'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
 import { CITY_CENTER, placeAt, searchPlaces, type Place } from './places'
 import { BackIcon } from './ui'
@@ -18,7 +19,7 @@ export default function PlacePicker({
   onClose: () => void
 }) {
   const box = useRef<HTMLDivElement>(null)
-  const map = useRef<maplibregl.Map | null>(null)
+  const map = useRef<L.Map | null>(null)
   const [place, setPlace] = useState<Place | null>(initial ?? null)
   const [resolving, setResolving] = useState(false)
   const [q, setQ] = useState('')
@@ -32,32 +33,27 @@ export default function PlacePicker({
   useEffect(() => {
     if (!box.current) return
     const start = initial ?? { lat: CITY_CENTER.lat, lon: CITY_CENTER.lon }
-    let m: maplibregl.Map
-    try {
-      m = new maplibregl.Map({
-        container: box.current,
-        style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: [start.lon, start.lat],
-        zoom: initial ? 16 : 13.5,
-        attributionControl: { compact: true },
-      })
-    } catch {
-      setMapError(true)
-      return
-    }
+    const m = L.map(box.current, { zoomControl: false, attributionControl: true }).setView(
+      [start.lat, start.lon],
+      initial ? 17 : 14,
+    )
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors © CARTO',
+    })
+      .on('tileload', () => (loaded = true))
+      .addTo(m)
+    m.attributionControl.setPrefix(false)
     map.current = m
-    // Fall back only if the map never comes up (no WebGL, tiles blocked), not on one missing tile
+
+    // Fall back only if not a single tile arrives (offline, blocked network)
     let loaded = false
-    m.once('load', () => (loaded = true))
     const giveUp = window.setTimeout(() => !loaded && setMapError(true), 12000)
 
     let ctrl: AbortController | null = null
     let timer = 0
-    m.on('moveend', () => {
-      if (skipReverse.current) {
-        skipReverse.current = false
-        return
-      }
+    const lookup = () => {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
         const c = m.getCenter()
@@ -66,11 +62,18 @@ export default function PlacePicker({
         setResolving(true)
         placeAt(c.lat, c.lng, ctrl.signal)
           .then(setPlace)
-          .catch(() => setPlace({ name: 'Точка на карті', address: '', lat: c.lat, lon: c.lng }))
+          .catch((e) => e.name !== 'AbortError' && setPlace({ name: 'Точка на карті', address: '', lat: c.lat, lon: c.lng }))
           .finally(() => setResolving(false))
       }, 600)
+    }
+    m.on('moveend', () => {
+      if (skipReverse.current) {
+        skipReverse.current = false
+        return
+      }
+      lookup()
     })
-    if (!initial) m.once('load', () => m.fire('moveend'))
+    if (!initial) lookup()
     return () => {
       window.clearTimeout(timer)
       window.clearTimeout(giveUp)
@@ -107,7 +110,7 @@ export default function PlacePicker({
     setResults([])
     setQ('')
     skipReverse.current = true
-    map.current?.flyTo({ center: [p.lon, p.lat], zoom: 16.5, duration: 600 })
+    map.current?.flyTo([p.lat, p.lon], 17, { duration: 0.6 })
   }
 
   const locateMe = () => {
@@ -117,7 +120,7 @@ export default function PlacePicker({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setNote(null)
-        map.current?.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 })
+        map.current?.flyTo([pos.coords.latitude, pos.coords.longitude], 17, { duration: 0.6 })
       },
       fail,
       { enableHighAccuracy: true, timeout: 8000 },

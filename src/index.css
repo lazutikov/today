@@ -2117,12 +2117,47 @@ html:has(.screen) body {
   text-underline-offset: 2px;
 }
 
-/* MapLibre's own CSS (loaded later) sets .maplibregl-map { position: relative },
-   which collapsed the map to zero height. Win on specificity. */
+/* Map libraries set their container to position: relative in their own CSS,
+   loaded after ours; keep the map full-screen regardless. */
 .picker .picker-map,
-.picker .picker-map.maplibregl-map {
+.picker .picker-map.leaflet-container {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.picker .leaflet-container {
+  background: #f2efe9;
+  font: inherit;
+}
+
+/* attribution sits above the bottom sheet, small and quiet */
+.picker .leaflet-bottom.leaflet-right {
+  bottom: 230px;
+}
+
+.picker .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Leaflet panes use z-index 400..1000: keep them inside the map layer,
+   under the pin, search and bottom sheet */
+.picker .picker-map {
+  z-index: 0;
+  isolation: isolate;
+}
+
+.picker-pin,
+.picker-top,
+.picker-results,
+.picker-sheet,
+.picker-fallback {
+  z-index: 2;
+}
+
+.picker-locate {
+  right: auto;
+  left: 14px;
 }
