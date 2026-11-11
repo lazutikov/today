@@ -144,14 +144,6 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
       {card.mine && <span className="fcard-badge">{card.matched ? 'Твій пост · є матч' : 'Твій пост'}</span>}
       <h2 className="fcard-title">{card.headline}</h2>
       <div className="fcard-meta">
-        {/* Who, like the place: bold line, the person's «про себе» under it */}
-        <div className="fcard-row">
-          <UserIcon />
-          <div>
-            <p className="fcard-venue">{who}</p>
-            {card.bio && <p className="fcard-addr">{card.bio}</p>}
-          </div>
-        </div>
         <p className="fcard-row">
           <ClockIcon />
           <b>{card.time}</b>
@@ -176,6 +168,14 @@ export function CardView({ card, onOpen }: { card: FeedCard; onOpen?: () => void
           <TagPill key={t} tag={t} />
         ))}
       </p>
+      {/* Who, like the place: bold line, the person's «про себе» under it. Last on the card. */}
+      <div className="fcard-row fcard-person">
+        <UserIcon />
+        <div>
+          <p className="fcard-venue">{who}</p>
+          {card.bio && <p className="fcard-addr">{card.bio}</p>}
+        </div>
+      </div>
     </article>
   )
 }

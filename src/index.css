@@ -2327,3 +2327,9 @@ html:has(.screen) body {
 .dsheet:not(.dsheet-dark) .fcard-venue {
   color: var(--f-text, #000);
 }
+
+.fcard .fcard-person {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--f-line, #ebebeb);
+}
