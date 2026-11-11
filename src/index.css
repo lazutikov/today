@@ -2116,3 +2116,13 @@ html:has(.screen) body {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* MapLibre's own CSS (loaded later) sets .maplibregl-map { position: relative },
+   which collapsed the map to zero height. Win on specificity. */
+.picker .picker-map,
+.picker .picker-map.maplibregl-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
