@@ -95,7 +95,7 @@ export function track(name: EventName, props: Record<string, unknown> = {}) {
 
 async function send(event: { name: string; props: Record<string, unknown>; src: string; session: string }) {
   if (phReady) {
-    posthog.capture(event.name, { ...event.props, src: event.src, city: location.hash.replace('#', '') || 'warsaw' })
+    posthog.capture(event.name, { ...event.props, src: event.src, city: location.hash.replace('#', '') === 'warsaw' ? 'warsaw' : 'lviv' })
     return
   }
   try {

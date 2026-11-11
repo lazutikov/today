@@ -895,7 +895,14 @@ html:has(.w) body {
 }
 
 .w-hero .w-hero-copy {
-  padding: 0 20px calc(25vw + 16px);
+  padding: 0 20px 28px;
+  max-width: 900px;
+}
+
+.w-hero .w-hero-title {
+  font-size: clamp(52px, 16vw, 76px);
+  line-height: 0.95;
+  margin-bottom: 16px;
 }
 
 .w-hero .w-hero-shade {
@@ -921,7 +928,14 @@ html:has(.w) body {
 
 @media (min-width: 960px) {
   .w-hero .w-hero-copy {
-    padding: 0 28px calc(min(30vw, 400px) * 0.62 + 28px);
+    padding: 0 28px 56px;
+  }
+
+  .w-hero .w-hero-title {
+    font-size: clamp(88px, 9.4vw, 124px);
+    line-height: 0.92;
+    letter-spacing: -0.05em;
+    margin-bottom: 24px;
   }
 
   .w-hero .w-hero-shade {
@@ -986,4 +1000,20 @@ html:has(.w) body {
     width: 26px;
     height: 26px;
   }
+}
+
+/* FAQ block is centred: title over the middle of the list */
+#faq {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#faq .stk {
+  padding-right: 0;
+}
+
+#faq .w-faq {
+  width: 100%;
+  margin: 0 auto;
 }

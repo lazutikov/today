@@ -14,7 +14,7 @@ import walk from './img/walk.jpg'
 const PROTOTYPE_URL =
   (import.meta.env.VITE_POSTHOG_KEY || import.meta.env.VITE_TG_BOT_ID
     ? './app'
-    : 'https://claude.ai/artifact/Wo3hscHojHcfzK9qLQKna6') + (CITY === 'lviv' ? '#lviv' : '')
+    : 'https://claude.ai/artifact/Wo3hscHojHcfzK9qLQKna6') + (CITY === 'warsaw' ? '#warsaw' : '')
 
 const PLACE = CITY === 'lviv' ? 'Проспект Свободи' : 'Plac Zbawiciela'
 
@@ -193,9 +193,6 @@ export default function Site() {
           </p>
           <Cta where="hero" />
         </div>
-        <p className="w-hero-word" aria-hidden="true">
-          today
-        </p>
       </header>
 
       <section className="w-intro" aria-labelledby="intro-title">

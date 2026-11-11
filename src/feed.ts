@@ -27,12 +27,12 @@ export type FeedCard = {
 
 export type City = 'warsaw' | 'lviv'
 
-/** City comes from the link: …/#lviv or …/#warsaw (Warsaw by default). */
+/** City comes from the link: …/#warsaw switches to Warsaw, Lviv by default. */
 export const CITY: City = (() => {
   try {
-    return location.hash.replace('#', '') === 'lviv' ? 'lviv' : 'warsaw'
+    return location.hash.replace('#', '') === 'warsaw' ? 'warsaw' : 'lviv'
   } catch {
-    return 'warsaw'
+    return 'lviv'
   }
 })()
 
