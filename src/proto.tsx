@@ -126,10 +126,34 @@ export default function Proto() {
   )
 }
 
+/* Own posts survive reloads and re-login, but only for today (it's a same-day service). */
+const MY_POSTS = 'today.myPosts'
+
+function loadMyPosts(): FeedCard[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MY_POSTS) || 'null') as { day: string; cards: FeedCard[] } | null
+    return saved && saved.day === new Date().toDateString() ? saved.cards : []
+  } catch {
+    return []
+  }
+}
+
+function saveMyPosts(cards: FeedCard[]) {
+  try {
+    localStorage.setItem(MY_POSTS, JSON.stringify({ day: new Date().toDateString(), cards }))
+  } catch {
+    /* memory only */
+  }
+}
+
 function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>('people')
-  const [people, setPeople] = useState<FeedCard[]>(PEOPLE)
-  const [events, setEvents] = useState<FeedCard[]>(EVENTS)
+  const [people, setPeople] = useState<FeedCard[]>(() => [...loadMyPosts().filter((c) => c.kind === 'person'), ...PEOPLE])
+  const [events, setEvents] = useState<FeedCard[]>(() => [...loadMyPosts().filter((c) => c.kind === 'event'), ...EVENTS])
+
+  useEffect(() => {
+    saveMyPosts([...people, ...events].filter((c) => c.mine))
+  }, [people, events])
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [matches, setMatches] = useState<Match[]>([])
   const [toast, setToast] = useState<string | null>(null)
