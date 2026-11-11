@@ -1825,3 +1825,34 @@ html:has(.screen) body {
   text-align: center;
   color: #575757;
 }
+
+/* Create button with a label: the segment gives way on narrow phones */
+.dock {
+  gap: 8px;
+}
+
+.dock .segment {
+  flex: 1 1 auto;
+  width: auto;
+  max-width: 255px;
+  min-width: 0;
+}
+
+.dock .fab {
+  flex: none;
+  width: auto;
+  height: 71px;
+  padding: 0 22px 0 18px;
+  border-radius: 35.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.dock .fab .ico {
+  width: 22px;
+  height: 22px;
+}

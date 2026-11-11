@@ -181,8 +181,9 @@ export function Dock({
           Вільні
         </button>
       </div>
-      <button className="fab" aria-label="Створити пост" onClick={onCreate}>
+      <button className="fab" onClick={onCreate}>
         <PlusIcon />
+        <span>Створити</span>
       </button>
     </nav>
     </>
