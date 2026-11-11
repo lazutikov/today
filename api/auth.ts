@@ -3,7 +3,7 @@
  * The bot token lives only in the Vercel env var TELEGRAM_BOT_TOKEN, never in the client.
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
-import { signSession } from './_kv.js'
+import { kv, kvReady, signSession } from './_kv.js'
 
 const MAX_AGE_SECONDS = 24 * 60 * 60
 
@@ -44,6 +44,7 @@ export async function POST(request: Request): Promise<Response> {
     username: (fields.username as string | undefined) ?? null,
     photo_url: (fields.photo_url as string | undefined) ?? null,
   }
+  await rememberPhoto(user.id, user.photo_url)
   return json({ ok: true, user, session: signSession(user) })
 }
 
@@ -79,7 +80,18 @@ function verifyMiniApp(initData: string, token: string): Response {
     username: (u.username as string | undefined) ?? null,
     photo_url: (u.photo_url as string | undefined) ?? null,
   }
+  await rememberPhoto(user.id, user.photo_url)
   return json({ ok: true, user, session: signSession(user) })
+}
+
+/** Telegram's public userpic link, used for the match screen when the bot can't read the photo. */
+async function rememberPhoto(id: number, url: string | null) {
+  if (!kvReady || !url || !/^https:\/\/(t\.me|telegram\.org|cdn\d*\.telesco\.pe)\//.test(url)) return
+  try {
+    await kv('SET', `tgphoto:${id}`, url, 'EX', 30 * 86400)
+  } catch {
+    /* photo is optional */
+  }
 }
 
 function json(body: unknown, status = 200) {

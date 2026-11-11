@@ -3,7 +3,7 @@
  * Telegram file links contain the bot token, so the image is fetched here and
  * passed through; the signed link is issued only inside a match.
  */
-import { checkPhoto, tg } from './_kv.js'
+import { checkPhoto, kv, kvReady, tg } from './_kv.js'
 
 export async function GET(request: Request): Promise<Response> {
   const q = new URL(request.url).searchParams
@@ -12,7 +12,12 @@ export async function GET(request: Request): Promise<Response> {
 
   const photos = await tg('getUserProfilePhotos', { user_id: Number(u), limit: 1 })
   const sizes = (photos.result as { photos?: { file_id: string; width: number }[][] } | undefined)?.photos?.[0]
-  if (!photos.ok || !sizes?.length) return new Response('no photo', { status: 404 })
+  if (!photos.ok || !sizes?.length) {
+    // The bot can't see it (privacy settings): fall back to the userpic link Telegram gave us at login.
+    const saved = kvReady ? ((await kv('GET', `tgphoto:${u}`)) as string | null) : null
+    if (saved) return Response.redirect(saved, 302)
+    return new Response('no photo', { status: 404 })
+  }
   const best = sizes.find((p) => p.width >= 320) ?? sizes[sizes.length - 1]
 
   const file = await tg('getFile', { file_id: best.file_id })

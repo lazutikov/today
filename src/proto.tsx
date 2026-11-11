@@ -850,7 +850,7 @@ function MatchSheet({
         <Avatar name={p.name} photo={match.photo} />
         <div>
           <p className="match-name">
-            {p.name}, {p.age}
+            {p.age > 0 ? `${p.name}, ${p.age}` : p.name}
           </p>
           <p className="dtext dsmall">
             {match.source === 'event' ? 'Автор плану' : 'Зустріч підтверджено'}
