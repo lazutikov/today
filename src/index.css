@@ -2487,11 +2487,18 @@ html:has(.screen) body {
 
 /* ---------- Feed search ---------- */
 
+.feed-tools {
+  display: flex;
+  gap: 8px;
+  margin: 16px 6.5px -8px;
+}
+
 .feed-search {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 16px 6.5px -8px;
   padding: 0 6px 0 16px;
   height: 48px;
   border-radius: 24px;
@@ -2608,4 +2615,45 @@ html:has(.screen) body {
 /* the search sits closer to its filter row */
 .feed-search + .feed-filters {
   margin-top: 8px;
+}
+
+.filter-btn {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--f-card, #fff);
+  color: var(--f-text, #000);
+  cursor: pointer;
+}
+
+.filter-btn .ico {
+  width: 22px;
+  height: 22px;
+}
+
+.filter-btn.on {
+  background: #000;
+  color: #fff;
+}
+
+.filter-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--f-accent);
+  color: var(--f-on-accent, #000);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--f-bg, #ebebeb);
 }

@@ -50,6 +50,7 @@ import {
   type Tab,
   TagPill,
   BellIcon,
+  FilterIcon,
   SearchIcon,
   ClockIcon,
   shortAddress,
@@ -110,8 +111,7 @@ type Overlay =
   | { t: 'reason'; inc: Incoming }
   | { t: 'notifs' }
   | { t: 'spot' }
-  | { t: 'radius' }
-  | { t: 'cats' }
+  | { t: 'filters' }
   | null
 
 const ANSWER_SECONDS = 5 * 60
@@ -705,6 +705,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     return true
   })
   const filtering = Boolean(query.trim()) || filters.cats.length > 0 || radiusOn
+  // Badge on the filter button: distance counts once, each category once
+  const activeFilters = (radiusOn ? 1 : 0) + filters.cats.length
   // What people look for (length and result count only, not the words)
   useEffect(() => {
     if (!query.trim()) return
@@ -812,6 +814,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         </div>
       )}
 
+      <div className="feed-tools">
       <div className="feed-search" role="search">
         <SearchIcon />
         <input
@@ -828,35 +831,17 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           </button>
         )}
       </div>
-
-      <div className="feed-filters">
-        {tab === 'events' && (
-          <button
-            className={radiusOn ? 'ffilter on' : 'ffilter'}
-            onClick={() => setOverlay({ t: 'radius' })}
-            aria-haspopup="dialog"
-          >
-            📍 {radiusOn ? `До ${filters.radius} км` : 'Будь-де'} <span aria-hidden="true">▾</span>
-          </button>
-        )}
-        <button
-          className={filters.cats.length ? 'ffilter on' : 'ffilter'}
-          onClick={() => setOverlay({ t: 'cats' })}
-          aria-haspopup="dialog"
-        >
-          {filters.cats.length === 0
-            ? 'Усі категорії'
-            : filters.cats.length === 1
-              ? filters.cats[0]
-              : `${filters.cats[0]} +${filters.cats.length - 1}`}{' '}
-          <span aria-hidden="true">▾</span>
-        </button>
-        {(filters.cats.length > 0 || filters.radius !== null) && (
-          <button className="ffilter-reset" onClick={() => setFilters({ radius: null, cats: [] })}>
-            Скинути
-          </button>
-        )}
+      <button
+        className={activeFilters ? 'filter-btn on' : 'filter-btn'}
+        onClick={() => setOverlay({ t: 'filters' })}
+        aria-label={activeFilters ? `Фільтри, увімкнено: ${activeFilters}` : 'Фільтри'}
+        aria-haspopup="dialog"
+      >
+        <FilterIcon />
+        {activeFilters > 0 && <span className="filter-badge">{activeFilters}</span>}
+      </button>
       </div>
+
 
       <ul className="cards" id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {shown.map((card) => (
@@ -909,50 +894,29 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
       <Dock tab={tab} onTab={switchTab} onCreate={() => setOverlay({ t: 'create' })} />
 
-      {overlay?.t === 'radius' && (
-        <DarkSheet title="Як далеко" onClose={() => setOverlay(null)}>
-          {!from && (
-            <p className="dtext dsmall">
-              Щоб фільтрувати за відстанню, увімкни локацію або обери адресу вгорі (📍 {spot.label}).
-            </p>
-          )}
-          <div className="dchips">
-            {([null, 1, 3, 5] as const).map((r) => (
-              <button
-                key={String(r)}
-                className={filters.radius === r ? 'dchip on' : 'dchip'}
-                disabled={r !== null && !from}
-                onClick={() => {
-                  setFilters({ ...filters, radius: r })
-                  setOverlay(null)
-                }}
-              >
-                {r === null ? 'Будь-де' : `До ${r} км`}
-              </button>
-            ))}
-          </div>
-          {!from && (
-            <button
-              className="dbtn"
-              onClick={() => {
-                here.request()
-                setOverlay(null)
-              }}
-            >
-              Увімкнути локацію
-            </button>
-          )}
-        </DarkSheet>
-      )}
-      {overlay?.t === 'cats' && (
-        <CatsSheet
-          value={filters.cats}
-          count={(cats) =>
-            filterByQuery(cards, query).filter((c) => !cats.length || c.tags.some((t) => cats.includes(t))).length
+      {overlay?.t === 'filters' && (
+        <FiltersSheet
+          value={filters}
+          withRadius={tab === 'events'}
+          canRadius={Boolean(from)}
+          placeLabel={spot.label}
+          count={(f) =>
+            filterByQuery(cards, query).filter((c) => {
+              if (f.cats.length && !c.tags.some((t) => f.cats.includes(t))) return false
+              if (tab === 'events' && f.radius !== null && from) {
+                if (c.lat === undefined || c.lon === undefined) return false
+                return distanceKm(from, { lat: c.lat, lon: c.lon }) <= f.radius
+              }
+              return true
+            }).length
           }
+          onLocate={() => {
+            here.request()
+            setOverlay(null)
+          }}
           onClose={() => setOverlay(null)}
-          onApply={(cats) => {
-            setFilters({ ...filters, cats })
+          onApply={(f) => {
+            setFilters(f)
             setOverlay(null)
           }}
         />
@@ -1158,25 +1122,65 @@ function saveFilters(f: Filters) {
   }
 }
 
-function CatsSheet({
+function FiltersSheet({
   value,
+  withRadius,
+  canRadius,
+  placeLabel,
   count,
+  onLocate,
   onClose,
   onApply,
 }: {
-  value: string[]
-  count: (cats: string[]) => number
+  value: Filters
+  /** Distance only for plans (free-time posts have no point) */
+  withRadius: boolean
+  /** Known position or a picked address */
+  canRadius: boolean
+  placeLabel: string
+  count: (f: Filters) => number
+  onLocate: () => void
   onClose: () => void
-  onApply: (cats: string[]) => void
+  onApply: (f: Filters) => void
 }) {
-  const [cats, setCats] = useState(value)
-  const toggle = (t: string) => setCats((c) => (c.includes(t) ? c.filter((x) => x !== t) : [...c, t]))
-  const n = count(cats)
+  const [f, setF] = useState<Filters>(value)
+  const toggle = (t: string) =>
+    setF((x) => ({ ...x, cats: x.cats.includes(t) ? x.cats.filter((c) => c !== t) : [...x.cats, t] }))
+  const n = count(f)
+  const any = f.cats.length > 0 || f.radius !== null
   return (
-    <DarkSheet title="Категорії" onClose={onClose}>
+    <DarkSheet title="Фільтри" onClose={onClose}>
+      {withRadius && (
+        <>
+          <p className="dlabel">Як далеко</p>
+          <div className="dchips">
+            {([null, 1, 3, 5] as const).map((r) => (
+              <button
+                key={String(r)}
+                className={f.radius === r ? 'dchip on' : 'dchip'}
+                aria-pressed={f.radius === r}
+                disabled={r !== null && !canRadius}
+                onClick={() => setF({ ...f, radius: r })}
+              >
+                {r === null ? 'Будь-де' : `До ${r} км`}
+              </button>
+            ))}
+          </div>
+          {!canRadius && (
+            <p className="dhint dhint-left">
+              Щоб фільтрувати за відстанню,{' '}
+              <button className="link-btn" onClick={onLocate}>
+                увімкни локацію
+              </button>{' '}
+              або обери адресу вгорі (📍 {placeLabel}).
+            </p>
+          )}
+        </>
+      )}
+      <p className="dlabel">Категорії</p>
       <div className="dchips">
         {TAGS.map((t) => {
-          const on = cats.includes(t)
+          const on = f.cats.includes(t)
           const c = TAG_COLORS[t]
           return (
             <button
@@ -1191,12 +1195,12 @@ function CatsSheet({
           )
         })}
       </div>
-      <button className="dbtn" onClick={() => onApply(cats)}>
-        {n > 0 ? `Показати ${n}` : 'Нікого з такими категоріями'}
+      <button className="dbtn" onClick={() => onApply(f)}>
+        {n > 0 ? `Показати ${n}` : 'Нікого за цими фільтрами'}
       </button>
-      {cats.length > 0 && (
-        <button className="dlink" onClick={() => setCats([])}>
-          Скинути
+      {any && (
+        <button className="dlink" onClick={() => setF({ radius: null, cats: [] })}>
+          Скинути все
         </button>
       )}
     </DarkSheet>
