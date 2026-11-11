@@ -89,6 +89,8 @@ export type EventName =
   | 'notifs_open'
   | 'profile_restored'
   | 'deep_link'
+  | 'spot_auto'
+  | 'spot_pick'
   | 'notif_tap'
   | 'login_error'
 

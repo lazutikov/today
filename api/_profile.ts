@@ -3,7 +3,7 @@
  * age and notification choice on any device. Districts also feed the
  * "new plan near you" pings.
  */
-import { kv } from './_kv.js'
+import { cleanCity, kv } from './_kv.js'
 
 export type ServerProfile = {
   bio: string
@@ -12,12 +12,12 @@ export type ServerProfile = {
   age?: number
   /** Bot may message about new plans in my districts (default on) */
   notify: boolean
-  city: 'lviv' | 'warsaw'
+  city: string
   updatedAt: number
 }
 
 /** Any of these means "the whole city": such people hear about every post. */
-export const WHOLE = new Set(['Весь Львів', 'Cała Warszawa'])
+export const WHOLE = new Set(['Весь Львів', 'Cała Warszawa', 'Все місто'])
 
 const areaKey = (city: string, area: string) => `area:${city}:${area}`
 
@@ -32,7 +32,7 @@ export function cleanProfile(input: Record<string, unknown>): ServerProfile {
     gender: input.gender === 'Чоловік' || input.gender === 'Жінка' ? input.gender : undefined,
     age: Number.isFinite(age) && age >= 16 && age < 100 ? Math.round(age) : undefined,
     notify: input.notify !== false,
-    city: input.city === 'warsaw' ? 'warsaw' : 'lviv',
+    city: cleanCity(input.city),
     updatedAt: Date.now(),
   }
 }
@@ -59,8 +59,7 @@ export async function setNotify(userId: number, on: boolean) {
 /** Everyone who chose one of the post's districts or the whole city. */
 export async function audienceFor(city: string, postAreas: string[]): Promise<number[]> {
   const keys = new Set<string>()
-  const whole = [...WHOLE].find((w) => (city === 'warsaw' ? w.startsWith('Cała') : w.startsWith('Весь')))!
-  keys.add(areaKey(city, whole))
+  for (const w of WHOLE) keys.add(areaKey(city, w))
   for (const a of postAreas) keys.add(areaKey(city, a))
   // A post for the whole city reaches everyone who picked any district
   if (postAreas.some((a) => WHOLE.has(a))) {

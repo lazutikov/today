@@ -3,7 +3,7 @@
  * on a tap (or reused if permission was already given) and kept for 30 minutes.
  */
 import { useEffect, useState } from 'react'
-import { CITY_CENTER } from './places'
+import { cityCenter } from './places'
 
 /** Further than this from the city centre, distances mean nothing: hide them. */
 const MAX_FROM_CITY_KM = 30
@@ -71,7 +71,7 @@ function locate(): Promise<Coords> {
 export type LocState = 'unknown' | 'asking' | 'on' | 'denied' | 'off' | 'far'
 
 /** Is this person in town? (far away we show plain km instead of time to get there) */
-export const inCity = (c: Coords) => distanceKm(c, CITY_CENTER) <= MAX_FROM_CITY_KM
+export const inCity = (c: Coords) => distanceKm(c, cityCenter()) <= MAX_FROM_CITY_KM
 
 /** My position for distances: silent if already allowed, otherwise on request(). */
 export function useMyLocation() {

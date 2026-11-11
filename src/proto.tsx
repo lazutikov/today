@@ -7,7 +7,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { mapsLink, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
-import { CITY, CITY_NAME, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
+import { CITY, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
@@ -15,6 +15,11 @@ import { guessGender } from './gender'
 import { NotificationsPage } from './notifications'
 import { rankFeed } from './rank'
 import { useMyLocation, type Coords } from './location'
+import { getSpot, isHomeCity, setSpot, useSpot } from './area'
+
+const getSpotKey = () => getSpot().key
+import { spotAt } from './places'
+import { SpotPicker } from './SpotPicker'
 import { clearTgUser, inMiniApp, loadSession, loadTgUser, miniAppLogin, setupMiniApp, telegramEnabled } from './telegram'
 import { identify, resetIdentity, track } from './track'
 import {
@@ -102,6 +107,7 @@ type Overlay =
   | { t: 'incoming'; inc: Incoming }
   | { t: 'reason'; inc: Incoming }
   | { t: 'notifs' }
+  | { t: 'spot' }
   | null
 
 const ANSWER_SECONDS = 5 * 60
@@ -175,7 +181,7 @@ export default function Proto() {
         profile={withGuessedGender(loadProfile())}
         onDone={(p) => {
           saveProfile(p)
-          saveProfileRemote(p, CITY)
+          saveProfileRemote(p, getSpotKey())
           setSignedIn(true)
           setStage('app')
         }}
@@ -229,6 +235,24 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
   // Position for distances: never leaves the phone
   const here = useMyLocation()
+  // "Звідки": the city the feed is about (follows the phone unless picked by hand)
+  const spot = useSpot()
+  const home = isHomeCity(spot)
+  const from: Coords | null = spot.precise ? { lat: spot.lat, lon: spot.lon } : null
+  useEffect(() => {
+    if (spot.mode !== 'auto' || !here.coords) return
+    const c = here.coords
+    if (spot.precise && Math.abs(spot.lat - c.lat) < 0.002 && Math.abs(spot.lon - c.lon) < 0.002) return
+    const ctrl = new AbortController()
+    spotAt(c.lat, c.lon, ctrl.signal)
+      .then((next) => {
+        setSpot(next)
+        track('spot_auto', { city: next.key })
+      })
+      .catch(() => {})
+    return () => ctrl.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [here.coords, spot.mode])
   const [locHidden, setLocHidden] = useState(() => {
     try {
       return localStorage.getItem('today.locPromptHidden') === '1'
@@ -262,7 +286,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     })
   const refreshPosts = () => {
     if (!live) return
-    fetchPosts(CITY).then(setRealPosts)
+    fetchPosts(getSpotKey()).then(setRealPosts)
     fetchNotifs().then(mergeNotifs)
     fetchMeetings().then((list) => {
       const real: Match[] = list.map((m) => ({
@@ -307,6 +331,17 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
   /* ----- real feed and incoming requests (polling) ----- */
   const seenInbox = useRef(new Set<string>())
+  // Another city picked: reload its plans
+  const firstSpot = useRef(true)
+  useEffect(() => {
+    if (firstSpot.current) {
+      firstSpot.current = false
+      return
+    }
+    setRealPosts([])
+    refreshPosts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spot.key])
   const deepLink = useRef(new URLSearchParams(location.search).get('post'))
   useEffect(() => {
     const id = deepLink.current
@@ -324,7 +359,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     refreshPosts()
     fetchMe().then(({ profile: remote }) => {
       if (!remote) {
-        saveProfileRemote(loadProfile(), CITY) // first time on the server: upload what this device has
+        saveProfileRemote(loadProfile(), getSpotKey()) // first time on the server: upload what this device has
         return
       }
       const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify }
@@ -517,7 +552,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const publish = async (card: FeedCard) => {
     if (live) {
       // Real post: everyone signed in sees it; answers come from real people only.
-      const saved = await createPost(card, CITY)
+      const saved = await createPost(card, spot.key)
       if (!saved) return say('Не вдалося опублікувати, спробуй ще раз')
       setRealPosts((l) => [saved, ...l.filter((c) => !(c.mine && c.kind === saved.kind))])
       setTab(saved.kind === 'person' ? 'people' : 'events')
@@ -570,7 +605,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     track('profile_save', { hasBio: Boolean(next.bio), notify: next.notify !== false })
     setProfile(next)
     saveProfile(next)
-    saveProfileRemote(next, CITY)
+    saveProfileRemote(next, getSpotKey())
     // Own posts show the profile bio, so refresh them too.
     const patch = (l: FeedCard[]) =>
       l.map((c) => (c.mine ? { ...c, bio: next.bio, gender: next.gender, age: next.age ?? 0 } : c))
@@ -639,20 +674,33 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     setTab(next)
   }
 
+  // Demo cards live in the launch city only; elsewhere the feed is just real people
+  const local = (l: FeedCard[]) => (home ? l : l.filter((c) => c.mine))
   const cards = rankFeed(
     tab === 'people'
-      ? [...realPosts.filter((c) => c.kind === 'person'), ...people]
-      : [...realPosts.filter((c) => c.kind === 'event'), ...events],
-    profile.areas,
+      ? [...realPosts.filter((c) => c.kind === 'person'), ...local(people)]
+      : [...realPosts.filter((c) => c.kind === 'event'), ...local(events)],
+    home ? profile.areas : [],
     new Date(),
-    here.coords,
+    from,
   )
 
   return (
     <div className="screen">
       <header className="screen-head screen-head-row">
         <div className="wordmark">
-          today <span className="proto-tag">{live ? 'наживо' : 'демо'}, {CITY_NAME}</span>
+          today
+          <button
+            className="spot-btn"
+            onClick={() => setOverlay({ t: 'spot' })}
+            aria-label={`Звідки: ${spot.label}. Змінити`}
+          >
+            <PinIcon />
+            <span className="spot-btn-text">{spot.label}</span>
+            <span className="spot-btn-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
         </div>
         <div className="head-actions">
           {live && (
@@ -701,7 +749,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         ),
       )}
 
-      {!here.coords && !locHidden && tab === 'events' && (
+      {spot.mode === 'auto' && !spot.precise && !locHidden && tab === 'events' && (
         <div className="loc-chip">
           <button
             className="loc-chip-main"
@@ -741,7 +789,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           <li key={card.id}>
             <CardView
               card={card}
-              from={here.coords}
+              from={from}
               onOpen={() => {
                 track('card_tap', { card: card.id })
                 setOverlay({ t: 'detail', card })
@@ -762,6 +810,15 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
       <Dock tab={tab} onTab={switchTab} onCreate={() => setOverlay({ t: 'create' })} />
 
+      {overlay?.t === 'spot' && (
+        <SpotPicker
+          current={spot}
+          onClose={() => {
+            track('spot_pick', { city: getSpot().key, mode: getSpot().mode })
+            setOverlay(null)
+          }}
+        />
+      )}
       {overlay?.t === 'notifs' && (
         <NotificationsPage
           items={notifs.items}
@@ -773,7 +830,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'detail' && (
         <DetailSheet
           card={[...realPosts, ...people, ...events].find((c) => c.id === overlay.card.id) ?? overlay.card}
-          from={here.coords}
+          from={from}
           onClose={() => setOverlay(null)}
           onInvite={() =>
             busyWaiting
@@ -842,6 +899,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'create' && (
         <CreateSheet
           profile={profile}
+          home={home}
           onClose={() => setOverlay(null)}
           onPublish={publish}
         />
@@ -1357,10 +1415,13 @@ function ProfileSheet({
 
 function CreateSheet({
   profile,
+  home,
   onClose,
   onPublish,
 }: {
   profile: Profile
+  /** Launch city: has our districts. Elsewhere a post covers the whole city. */
+  home: boolean
   onClose: () => void
   onPublish: (card: FeedCard) => void
 }) {
@@ -1369,7 +1430,7 @@ function CreateSheet({
   const [from, setFrom] = useState('18:00')
   const [to, setTo] = useState('21:00')
   const [at, setAt] = useState('20:00')
-  const [areas, setAreas] = useState<string[]>(profile.areas ?? [])
+  const [areas, setAreas] = useState<string[]>(home ? (profile.areas ?? []) : ['Все місто'])
   const [venue, setVenue] = useState<Place | null>(null)
   const [picking, setPicking] = useState(false)
   /** How many people the author is looking for (not counting themselves) */
@@ -1413,7 +1474,8 @@ function CreateSheet({
   const switchKind = (k: 'person' | 'event') => {
     setKind(k)
     setError(null)
-    if (k === 'event') setAreas(venue?.area ? [venue.area] : [])
+    if (!home) setAreas(['Все місто'])
+    else if (k === 'event') setAreas(venue?.area ? [venue.area] : [])
     else if (areas.length <= 1 && profile.areas?.length) setAreas(profile.areas)
     applyText(headline, k, k === 'event' ? tags.slice(0, 1) : tags, auto)
   }
@@ -1545,7 +1607,7 @@ function CreateSheet({
       )}
 
       {/* A plan has a venue: its district comes from the map. Free time has no place yet: pick districts. */}
-      {(kind === 'person' || (venue && !venue.area)) && (
+      {home && (kind === 'person' || (venue && !venue.area)) && (
         <>
           <p className="dlabel">
             {kind === 'person' ? 'Райони' : 'Район'}{' '}
@@ -1581,7 +1643,7 @@ function CreateSheet({
                   setPicking(false)
                   setError(null)
                   // A plan happens at one venue: its district comes from the map when we can tell
-                  if (p.area) setAreas([p.area])
+                  if (p.area && home) setAreas([p.area])
                 }}
               />
             </Suspense>
@@ -1668,7 +1730,7 @@ function FeedEnd({
         ]}
       />
       <p className="feed-end-text">
-        Більше нікого{where} на сьогодні. Напиши, що хочеш, і люди побачать твій план першим.
+        Поки нікого{where} на сьогодні. Напиши, що хочеш, і люди побачать твій план першим.
       </p>
       <button className="dbtn" onClick={onCreate}>
         {kind === 'people' ? 'Покличте мене' : 'Кличу з собою'}

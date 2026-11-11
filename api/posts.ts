@@ -3,13 +3,13 @@
  *  POST   /api/posts             publish (replaces your previous post of the same kind)
  *  DELETE /api/posts?id=...      remove your post
  */
-import { json, kvReady, readJson, readSession } from './_kv.js'
+import { cleanCity, json, kvReady, readJson, readSession } from './_kv.js'
 import { cleanPost, deletePost, listPosts, pingNearby, publicCard, savePost } from './_social.js'
 
 export async function GET(request: Request): Promise<Response> {
   if (!kvReady) return json({ ok: false, error: 'not_configured' }, 503)
   const user = readSession(request)
-  const city = new URL(request.url).searchParams.get('city') === 'warsaw' ? 'warsaw' : 'lviv'
+  const city = cleanCity(new URL(request.url).searchParams.get('city'))
   const posts = await listPosts(city)
   const visible = posts.filter((p) => !(p.kind === 'person' && p.matched && p.authorId !== user?.id))
   return json({ ok: true, posts: visible.map((p) => publicCard(p, user?.id ?? null)) })

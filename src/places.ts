@@ -1,8 +1,8 @@
 /**
- * Free place search for Lviv/Warsaw on OpenStreetMap data (Photon by komoot).
+ * Free place search on OpenStreetMap data (Photon by komoot), any city.
  * Public API, no key: keep it gentle (debounced, at most ~1 request a second).
  */
-import { CITY } from './feed'
+import { cityKey, getSpot, isHomeCity, type Spot } from './area'
 
 export type Place = {
   /** What people will see: venue name, or street and number */
@@ -15,12 +15,17 @@ export type Place = {
   area?: string
 }
 
-const CITIES = {
-  lviv: { lat: 49.8397, lon: 24.0297, bbox: '23.85,49.76,24.20,49.92' },
-  warsaw: { lat: 52.2297, lon: 21.0122, bbox: '20.80,52.09,21.28,52.37' },
-} as const
+/** Tight boxes for the cities we know well; elsewhere search is just biased to the spot */
+const BOXES: Record<string, string> = {
+  lviv: '23.85,49.76,24.20,49.92',
+  warsaw: '20.80,52.09,21.28,52.37',
+}
 
-export const CITY_CENTER = CITIES[CITY]
+/** Centre of the city the person is looking at */
+export const cityCenter = () => {
+  const s = getSpot()
+  return { lat: s.lat, lon: s.lon }
+}
 
 const PHOTON = 'https://photon.komoot.io'
 
@@ -50,7 +55,7 @@ const LVIV_CENTRES: [string, number, number][] = [
 ]
 
 export function nearestArea(lat: number, lon: number): string | undefined {
-  if (CITY !== 'lviv' || !Number.isFinite(lat)) return undefined
+  if (getSpot().key !== 'lviv' || !Number.isFinite(lat)) return undefined
   const k = Math.cos((lat * Math.PI) / 180) // lon degrees are shorter at this latitude
   let best: [string, number] | null = null
   for (const [name, la, lo] of LVIV_CENTRES) {
@@ -70,13 +75,15 @@ function toPlace(f: Feature): Place {
   const text = [p.district, p.locality, p.county].filter(Boolean).join(' ')
   const lat = f.geometry.coordinates[1]
   const lon = f.geometry.coordinates[0]
-  const area = CITY === 'lviv' ? (LVIV_AREAS.find(([re]) => re.test(text))?.[1] ?? nearestArea(lat, lon)) : undefined
+  const area =
+    getSpot().key === 'lviv' ? (LVIV_AREAS.find(([re]) => re.test(text))?.[1] ?? nearestArea(lat, lon)) : undefined
   return { name, address, lat, lon, area }
 }
 
 export async function searchPlaces(q: string, signal?: AbortSignal): Promise<Place[]> {
-  const c = CITY_CENTER
-  const url = `${PHOTON}/api/?q=${encodeURIComponent(q)}&lat=${c.lat}&lon=${c.lon}&zoom=13&limit=8&bbox=${c.bbox}`
+  const s = getSpot()
+  const box = BOXES[s.key] ? `&bbox=${BOXES[s.key]}` : ''
+  const url = `${PHOTON}/api/?q=${encodeURIComponent(q)}&lat=${s.lat}&lon=${s.lon}&zoom=13&limit=8${box}`
   const res = await fetch(url, { signal })
   if (!res.ok) throw new Error('search_failed')
   const body = (await res.json()) as { features: Feature[] }
@@ -97,4 +104,57 @@ export async function placeAt(lat: number, lon: number, signal?: AbortSignal): P
 /** Opens directions in whatever maps app the phone has. */
 export function mapsLink(p: { lat: number; lon: number; name?: string }) {
   return `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`
+}
+
+/* ---------- Cities and addresses anywhere (for "Звідки") ---------- */
+
+export type SpotHit = Spot & { sub: string }
+
+const CITY_TYPES = new Set(['city', 'town', 'village'])
+
+function toSpot(f: Feature, mode: Spot['mode']): SpotHit {
+  const p = f.properties
+  const isCity = CITY_TYPES.has(p.type ?? '') || (p.osm_key === 'place' && CITY_TYPES.has(p.osm_value ?? ''))
+  const city = (isCity ? p.name : p.city || p.town || p.village || p.name) || 'Точка на карті'
+  const here = isCity ? '' : p.name || [p.street, p.housenumber].filter(Boolean).join(', ') || p.district || ''
+  return {
+    key: cityKey(city),
+    city,
+    label: here ? `${city}, ${here}` : city,
+    lat: f.geometry.coordinates[1],
+    lon: f.geometry.coordinates[0],
+    mode,
+    precise: !isCity,
+    sub: [isCity ? p.state || p.county : [p.street, p.district].filter(Boolean).join(', '), p.country].filter(Boolean).join(', '),
+  }
+}
+
+/** Search cities first, then addresses, anywhere, biased to where the person is now */
+export async function searchSpots(q: string, near: { lat: number; lon: number }, signal?: AbortSignal) {
+  const url = `${PHOTON}/api/?q=${encodeURIComponent(q)}&lat=${near.lat}&lon=${near.lon}&limit=8`
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw new Error('search_failed')
+  const body = (await res.json()) as { features: Feature[] }
+  const hits = body.features.map((f) => toSpot(f, 'manual'))
+  return hits.sort((a, b) => Number(a.precise) - Number(b.precise))
+}
+
+/** The city around a GPS point (for the automatic "Звідки") */
+export async function spotAt(lat: number, lon: number, signal?: AbortSignal): Promise<Spot> {
+  const res = await fetch(`${PHOTON}/reverse?lat=${lat}&lon=${lon}&limit=1`, { signal })
+  if (!res.ok) throw new Error('reverse_failed')
+  const body = (await res.json()) as { features: Feature[] }
+  const f = body.features[0]
+  const p = f?.properties ?? {}
+  const city = p.city || p.town || p.village || p.name || 'Тут'
+  const district = isHomeCity({ key: cityKey(city) }) ? (nearestArea(lat, lon) ?? '') : ''
+  return {
+    key: cityKey(city),
+    city,
+    label: district && district !== 'Центр' ? `${city}, ${district}` : city,
+    lat,
+    lon,
+    mode: 'auto',
+    precise: true,
+  }
 }

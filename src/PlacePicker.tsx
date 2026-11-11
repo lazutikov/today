@@ -7,7 +7,7 @@
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
-import { CITY_CENTER, placeAt, searchPlaces, type Place } from './places'
+import { cityCenter, placeAt, searchPlaces, type Place } from './places'
 import { BackIcon } from './ui'
 
 export default function PlacePicker({
@@ -33,7 +33,7 @@ export default function PlacePicker({
   // Map
   useEffect(() => {
     if (!box.current) return
-    const start = initial ?? { lat: CITY_CENTER.lat, lon: CITY_CENTER.lon }
+    const start = initial ?? cityCenter()
     const m = L.map(box.current, { zoomControl: false, attributionControl: true }).setView(
       [start.lat, start.lon],
       initial ? 17 : 14,

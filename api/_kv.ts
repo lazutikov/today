@@ -138,3 +138,9 @@ export function checkPhoto(u: string, v: string, e: string, s: string): boolean 
   const sig = createHmac('sha256', sessionKey()).update(`photo:${u}:${v}:${e}`).digest('base64url').slice(0, 32)
   return sig.length === s.length && timingSafeEqual(Buffer.from(sig), Buffer.from(s))
 }
+
+/** City key from the client: 'lviv', 'warsaw' or a lowercased local name like 'київ' */
+export function cleanCity(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  return /^[\p{L}\p{N} '’.-]{2,40}$/u.test(s) ? s : 'lviv'
+}

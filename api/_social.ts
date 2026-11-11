@@ -2,7 +2,19 @@
  * Real posts and requests (invites to people, joins to events), shared by
  * /api/posts, /api/requests and the bot webhook.
  */
-import { contactUrl, esc, kv, kyivDay, kyivMinutes, mention, secondsToKyivMidnight, signPhoto, tg, type SessionUser } from './_kv.js'
+import {
+  cleanCity,
+  contactUrl,
+  esc,
+  kv,
+  kyivDay,
+  kyivMinutes,
+  mention,
+  secondsToKyivMidnight,
+  signPhoto,
+  tg,
+  type SessionUser,
+} from './_kv.js'
 import { audienceFor } from './_profile.js'
 
 export const ANSWER_SECONDS = 5 * 60
@@ -27,7 +39,8 @@ export type Post = {
   gender?: 'Чоловік' | 'Жінка'
   capacity?: number
   taken?: number
-  city: 'lviv' | 'warsaw'
+  /** 'lviv', 'warsaw' or any city's lowercased local name */
+  city: string
   authorId: number
   authorName: string
   authorUsername: string | null
@@ -98,7 +111,7 @@ export function cleanPost(input: Record<string, unknown>, user: SessionUser): Po
     // Author + 1..6 people they are looking for
     capacity: kind === 'event' ? Math.min(7, Math.max(2, Math.round(Number(input.capacity)) || 2)) : undefined,
     taken: kind === 'event' ? 1 : undefined,
-    city: input.city === 'warsaw' ? 'warsaw' : 'lviv',
+    city: cleanCity(input.city),
     authorId: user.id,
     authorName: user.first_name,
     authorUsername: user.username,
