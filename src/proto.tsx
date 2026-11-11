@@ -813,7 +813,7 @@ function DetailSheet({
       ) : (
         <>
           <button className="dbtn" onClick={onJoin} disabled={left <= 0}>
-            {left > 0 ? `Я з вами · ще ${left} ${placesWord(left)}` : 'Місць немає'}
+            {left <= 0 ? 'Місць немає' : left === 1 ? 'Я з вами' : `Я з вами · ще ${left} ${placesWord(left)}`}
           </button>
           <p className="dhint">Організатор підтвердить запит, і відкриється чат.</p>
         </>
