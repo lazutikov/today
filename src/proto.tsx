@@ -701,10 +701,23 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         ),
       )}
 
-      {!here.coords && !locHidden && here.state !== 'denied' && here.state !== 'far' && tab === 'events' && (
+      {!here.coords && !locHidden && tab === 'events' && (
         <div className="loc-chip">
-          <button className="loc-chip-main" onClick={here.request} disabled={here.state === 'asking'}>
-            📍 {here.state === 'asking' ? 'Шукаю, де ти…' : here.state === 'off' ? 'Не вдалося. Спробувати ще раз' : 'Показати, скільки добиратися до планів'}
+          <button
+            className="loc-chip-main"
+            onClick={here.request}
+            disabled={here.state === 'asking' || here.state === 'far'}
+          >
+            📍{' '}
+            {here.state === 'asking'
+              ? 'Шукаю, де ти…'
+              : here.state === 'off'
+                ? 'Не вдалося визначити. Спробувати ще раз'
+                : here.state === 'denied'
+                  ? 'Геолокацію вимкнено. Увімкни: 🔒 біля адреси сайту → Дозволи, і натисни тут'
+                  : here.state === 'far'
+                    ? `Ти зараз не ${CITY === 'warsaw' ? 'у Варшаві' : 'у Львові'}, тому час у дорозі не показуємо`
+                    : 'Показати, скільки добиратися до планів'}
           </button>
           <button
             className="loc-chip-x"
