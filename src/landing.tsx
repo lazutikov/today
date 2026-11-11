@@ -38,6 +38,7 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
   const [bot, setBot] = useState<BotLogin | null>(null)
   const [waiting, setWaiting] = useState(false)
   const abort = useRef<AbortController | null>(null)
+  const [expired, setExpired] = useState(false)
   const tgLink = miniAppLink(CITY)
 
   useEffect(() => {
@@ -53,6 +54,9 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         setBot(b)
         startWaiting(b)
       }
+    } else if (telegramEnabled) {
+      // Real site: the landing page is the start screen; /app without a login code goes back there.
+      location.replace(`./${location.hash}`)
     } else {
       prepareBotLogin().then(setBot)
     }
@@ -75,7 +79,8 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         if (e instanceof Error && e.message === 'aborted') return
         track('login_error', { reason: e instanceof Error ? e.message : 'unknown', via: 'bot' })
         setWaiting(false)
-        prepareBotLogin().then(setBot)
+        if (telegramEnabled) setExpired(true)
+        else prepareBotLogin().then(setBot)
       })
   }
 
@@ -95,6 +100,40 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       track('login_error', { reason: e instanceof Error ? e.message : 'unknown', via: 'widget' })
       setLoading(false)
     }
+  }
+
+  // Real site: a plain waiting screen, the marketing lives on the landing page.
+  if (telegramEnabled) {
+    return (
+      <div className="screen wait-screen">
+        <span className="wordmark">today</span>
+        <div className="wait-screen-body" aria-live="polite">
+          {expired ? (
+            <>
+              <h1>Посилання для входу застаріло</h1>
+              <p>Таке буває, якщо не натиснути Start за 10 хвилин. Спробуй ще раз з головної.</p>
+              <a className="dbtn tg-btn" href={`./${location.hash}`}>
+                На головну
+              </a>
+            </>
+          ) : (
+            <>
+              <span className="btn-spinner wait-screen-spinner" aria-hidden="true" />
+              <h1>Натисни Start у Telegram</h1>
+              <p>Ми відкрили бота today. Натисни там «Почати» і повертайся сюди: вхід відбудеться сам.</p>
+              {bot && (
+                <a className="dbtn tg-btn" href={bot.link} target="_blank" rel="noopener">
+                  <TelegramIcon /> Відкрити Telegram ще раз
+                </a>
+              )}
+              <a className="wait-screen-back" href={`./${location.hash}`}>
+                Повернутися на сайт
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (

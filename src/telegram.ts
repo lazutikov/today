@@ -130,6 +130,20 @@ export async function prepareBotLogin(): Promise<BotLogin | null> {
   return { code, link: `https://t.me/${BOT_NAME}?start=login_${code}` }
 }
 
+/** Makes a code right in the click (no waiting), registration runs in the background. */
+export function startBotLogin(): BotLogin | null {
+  if (!BOT_NAME) return null
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const code = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+  fetch('/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code }),
+    keepalive: true,
+  }).catch(() => {})
+  return { code, link: `https://t.me/${BOT_NAME}?start=login_${code}` }
+}
+
 /** Rebuilds the bot link for a code registered elsewhere (the site's button). */
 export function botFromCode(code: string): BotLogin | null {
   return BOT_NAME ? { code, link: `https://t.me/${BOT_NAME}?start=login_${code}` } : null

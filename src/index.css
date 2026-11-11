@@ -1587,3 +1587,56 @@ html:has(.screen) body {
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* Real site: waiting for "Start" in the bot instead of a second start screen */
+.screen.wait-screen {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 20px 32px;
+}
+
+.wait-screen-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.wait-screen-body h1 {
+  margin: 8px 0 0;
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.wait-screen-body p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  color: #575757;
+}
+
+.wait-screen-body .tg-btn {
+  width: 100%;
+  margin-top: 8px;
+  text-decoration: none;
+}
+
+.wait-screen-spinner {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.wait-screen-back {
+  align-self: center;
+  color: #575757;
+  font-size: 15px;
+}

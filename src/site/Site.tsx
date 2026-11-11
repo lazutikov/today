@@ -1,7 +1,7 @@
 import { useEffect, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { CITY, CITY_NAME, EVENTS, PEOPLE, TAG_COLORS } from '../feed'
 import { isSignedIn } from '../profile'
-import { prepareBotLogin, type BotLogin } from '../telegram'
+import { loadSession, startBotLogin } from '../telegram'
 import { track } from '../track'
 import { CardView, TagPill } from '../ui'
 import bowling from './img/bowling.jpg'
@@ -21,15 +21,14 @@ const PROTOTYPE_URL =
 const CTA_URL = PROTOTYPE_URL
 
 // One click from the landing: open the bot for "Start" and move this tab to /app, which waits for it.
-let botLogin: BotLogin | null = null
-if (!isSignedIn()) prepareBotLogin().then((b) => (botLogin = b))
-
 function goSignIn(e: MouseEvent<HTMLAnchorElement>, where: string) {
-  track('login_start', { from: where, via: botLogin ? 'bot' : 'page' })
-  if (!botLogin || isSignedIn()) return
+  if (isSignedIn() && loadSession()) return track('login_start', { from: where, via: 'already' })
+  const bot = startBotLogin()
+  track('login_start', { from: where, via: bot ? 'bot' : 'page' })
+  if (!bot) return
   e.preventDefault()
-  window.open(botLogin.link, '_blank', 'noopener')
-  location.href = `./app?login=${botLogin.code}${CITY === 'warsaw' ? '#warsaw' : ''}`
+  window.open(bot.link, '_blank', 'noopener')
+  location.href = `./app?login=${bot.code}${CITY === 'warsaw' ? '#warsaw' : ''}`
 }
 
 const PLACE = CITY === 'lviv' ? 'Проспект Свободи' : 'Plac Zbawiciela'
