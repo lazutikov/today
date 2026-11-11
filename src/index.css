@@ -1856,3 +1856,10 @@ html:has(.screen) body {
   width: 22px;
   height: 22px;
 }
+
+/* One type style for everything in the dock */
+.dock .seg,
+.dock .fab {
+  font-size: 15px;
+  font-weight: 600;
+}
