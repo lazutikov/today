@@ -5,7 +5,7 @@
  * Telegram proves it is Telegram with the secret_token set in /api/bot-setup.
  */
 import { createHash } from 'node:crypto'
-import { CODE_RE, CODE_TTL, json, kv, kvReady } from './_kv'
+import { CODE_RE, CODE_TTL, json, kv, kvReady } from './_kv.js'
 
 export function webhookSecret(token: string) {
   return createHash('sha256').update(`today-webhook:${token}`).digest('hex').slice(0, 48)

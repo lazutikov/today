@@ -2,8 +2,8 @@
  * Open once in a browser: points the bot's webhook at this deployment.
  * Safe to repeat; it only ever registers this site's own /api/bot.
  */
-import { json } from './_kv'
-import { webhookSecret } from './bot'
+import { json } from './_kv.js'
+import { webhookSecret } from './bot.js'
 
 export async function GET(request: Request): Promise<Response> {
   const token = process.env.TELEGRAM_BOT_TOKEN
