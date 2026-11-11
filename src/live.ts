@@ -23,6 +23,29 @@ export async function fetchMe(): Promise<{ age: number | null }> {
   return { age: r.ok ? (r.age ?? null) : null }
 }
 
+export type Meeting = {
+  id: string
+  name: string
+  age: number
+  contact: string
+  photo: string
+  tag: string
+  place: string
+  time: string
+  post: string
+  source: 'invite' | 'event' | 'incoming'
+}
+
+/** Today's confirmed meetings, wherever "Так" was tapped (app or bot). */
+export async function fetchMeetings(): Promise<Meeting[]> {
+  const r = await api<{ ok: boolean; meetings?: Meeting[] }>('/api/requests?meetings=1')
+  return r.ok && r.meetings ? r.meetings : []
+}
+
+export async function cancelMeetingApi(id: string, uncomfortable: boolean) {
+  await api('/api/requests', { method: 'POST', body: JSON.stringify({ id, cancel: true, uncomfortable }) })
+}
+
 export async function fetchPosts(city: string): Promise<FeedCard[]> {
   const r = await api<{ ok: boolean; posts?: FeedCard[] }>(`/api/posts?city=${city}`)
   return r.ok && r.posts ? r.posts : []

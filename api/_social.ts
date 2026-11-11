@@ -39,7 +39,12 @@ export type Req = {
   time: string
   from: { id: number; first_name: string; username: string | null; gender?: string; age?: number; bio?: string }
   to: { id: number; first_name: string; username: string | null }
-  status: 'pending' | 'yes' | 'no' | 'expired'
+  status: 'pending' | 'yes' | 'no' | 'expired' | 'cancelled'
+  /** Who cancelled a confirmed meeting, and whether they flagged it as uncomfortable */
+  cancelledBy?: number
+  reported?: boolean
+  /** Post author's age, for the requester's match screen */
+  toAge?: number
   reason?: string
   createdAt: number
   expiresAt: number
@@ -185,6 +190,7 @@ export async function createReq(
       bio: str(input.bio, 300) || undefined,
     },
     to: { id: post.authorId, first_name: post.authorName, username: post.authorUsername },
+    toAge: post.age || undefined,
     status: 'pending',
     createdAt: now,
     expiresAt: now + ANSWER_SECONDS * 1000,
@@ -245,6 +251,12 @@ export async function answerReq(
   await kv('DEL', `outgoing:${r.from.id}`)
 
   if (yes) {
+    // Both sides keep today's meetings, so the app shows them after a reload or a "Так" tapped in the bot.
+    const ttl = secondsToKyivMidnight() + 3 * 3600
+    for (const uid of [r.from.id, r.to.id]) {
+      await kv('ZADD', `matches:${uid}`, r.createdAt, r.id)
+      await kv('EXPIRE', `matches:${uid}`, ttl)
+    }
     const p = await getPost(r.postId)
     if (p) {
       if (r.type === 'join') p.taken = (p.taken ?? 1) + 1
@@ -331,4 +343,59 @@ export function matchViewForAuthor(r: Req) {
     time: r.time,
     tag: r.tag,
   }
+}
+
+/* ---------- Today's confirmed meetings ---------- */
+
+/** One meeting as the viewer sees it: the other person, where and when. */
+export function meetingView(r: Req, viewerId: number) {
+  const iAmAuthor = r.to.id === viewerId
+  const other = iAmAuthor ? r.from : r.to
+  return {
+    id: r.id,
+    name: other.first_name,
+    age: (iAmAuthor ? r.from.age : r.toAge) ?? 0,
+    contact: contactUrl(other),
+    photo: signPhoto(other.id, viewerId),
+    tag: r.tag,
+    place: r.place,
+    time: r.time,
+    post: r.postHeadline,
+    source: iAmAuthor ? 'incoming' : r.type === 'join' ? 'event' : 'invite',
+    acceptedAt: r.createdAt,
+  }
+}
+
+export async function listMeetings(userId: number) {
+  const ids = (await kv('ZRANGE', `matches:${userId}`, 0, -1, 'REV')) as string[]
+  const reqs = await Promise.all(ids.map((id) => getReq(id)))
+  return reqs.filter((r): r is Req => Boolean(r && r.status === 'yes')).map((r) => meetingView(r, userId))
+}
+
+/** Cancels a confirmed meeting from either side and tells the other person. */
+export async function cancelMeeting(id: string, userId: number, uncomfortable: boolean) {
+  const r = await getReq(id)
+  if (!r || (r.from.id !== userId && r.to.id !== userId)) return { ok: false, error: 'not_found' }
+  if (r.status !== 'yes') return { ok: false, error: 'not_active' }
+  r.status = 'cancelled'
+  r.cancelledBy = userId
+  r.reported = uncomfortable
+  await putReq(r)
+  for (const uid of [r.from.id, r.to.id]) await kv('ZREM', `matches:${uid}`, r.id)
+  if (uncomfortable) await kv('LPUSH', 'reports', JSON.stringify({ req: r.id, by: userId, at: Date.now() }))
+
+  const p = await getPost(r.postId)
+  if (p) {
+    if (r.type === 'join') p.taken = Math.max(1, (p.taken ?? 2) - 1)
+    else p.matched = false
+    await kv('SET', `post:${p.id}`, JSON.stringify(p), 'KEEPTTL')
+  }
+
+  const me = r.from.id === userId ? r.from : r.to
+  const other = r.from.id === userId ? r.to : r.from
+  await tg('sendMessage', {
+    chat_id: other.id,
+    text: `${me.first_name} скасував(ла) зустріч «${r.postHeadline}» (${r.place}, ${r.time}). Шкода. У стрічці є ще люди, вільні сьогодні.`,
+  })
+  return { ok: true }
 }

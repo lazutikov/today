@@ -13,7 +13,9 @@ import { clearTgUser, inMiniApp, loadSession, loadTgUser, miniAppLogin, setupMin
 import { identify, resetIdentity, track } from './track'
 import {
   answerRequest,
+  cancelMeetingApi,
   createPost,
+  fetchMeetings,
   fetchInbox,
   fetchPosts,
   isLive,
@@ -44,7 +46,8 @@ type Match = {
   place: string
   time: string
   source: 'invite' | 'event' | 'incoming'
-  /** Real matches: link that opens a chat with the person, and their Telegram photo */
+  /** Real matches: server request id, link that opens a chat with the person, and their Telegram photo */
+  reqId?: string
   contact?: string
   photo?: string
 }
@@ -185,7 +188,23 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   )
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
   const refreshPosts = () => {
-    if (live) fetchPosts(CITY).then(setRealPosts)
+    if (!live) return
+    fetchPosts(CITY).then(setRealPosts)
+    fetchMeetings().then((list) => {
+      const real: Match[] = list.map((m) => ({
+        id: `m-${m.id}`,
+        reqId: m.id,
+        with: [{ name: m.name, age: m.age }],
+        tag: m.tag,
+        place: m.place,
+        time: m.time,
+        source: m.source,
+        contact: m.contact,
+        photo: m.photo,
+      }))
+      // Server is the truth for real meetings; demo matches stay local.
+      setMatches((cur) => [...real, ...cur.filter((x) => !x.reqId)])
+    })
   }
 
   useEffect(() => {
@@ -270,6 +289,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         refreshPosts()
         addMatch({
           id: `m-${id}`,
+          reqId: id,
           with: [{ name: st.match.name, age: card.age }],
           tag: st.match.tag,
           place: st.match.place,
@@ -295,8 +315,8 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }
 
   const addMatch = (m: Match) => {
-    track('match', { source: m.source, tag: m.tag })
-    setMatches((list) => [m, ...list])
+    track('match', { source: m.source, tag: m.tag, real: Boolean(m.reqId) })
+    setMatches((list) => [m, ...list.filter((x) => x.id !== m.id)])
     setOverlay({ t: 'match', match: m })
   }
 
@@ -450,18 +470,15 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         </button>
       </header>
 
-      {matches.length > 0 && (
-        <button
-          className="plan-banner"
-          onClick={() => setOverlay({ t: 'match', match: matches[0] })}
-        >
+      {matches.map((m) => (
+        <button key={m.id} className="plan-banner" onClick={() => setOverlay({ t: 'match', match: m })}>
           <span className="plan-banner-dot" aria-hidden="true" />
           <span>
-            Сьогодні: <b>{matches[0].tag}</b>, {matches[0].with[0].name}, {matches[0].time}
+            Сьогодні: <b>{m.tag}</b>, {m.with[0].name}, {m.time}
           </span>
           <span aria-hidden="true">→</span>
         </button>
-      )}
+      ))}
 
       <ul className="cards" id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {cards.map((card) => (
@@ -534,13 +551,15 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           match={overlay.match}
           onClose={() => setOverlay(null)}
           onCancel={(free) => {
-            track('match_cancel', { free })
+            track('match_cancel', { free, real: Boolean(overlay.match.reqId) })
+            if (overlay.match.reqId) cancelMeetingApi(overlay.match.reqId, false)
             setMatches((l) => l.filter((m) => m.id !== overlay.match.id))
             setOverlay(null)
             say(free ? 'Зустріч скасовано' : 'Зустріч скасовано. Це вплине на рейтинг')
           }}
           onUncomfortable={() => {
-            track('uncomfortable')
+            track('uncomfortable', { real: Boolean(overlay.match.reqId) })
+            if (overlay.match.reqId) cancelMeetingApi(overlay.match.reqId, true)
             setMatches((l) => l.filter((m) => m.id !== overlay.match.id))
             setOverlay(null)
             say('Дякуємо, ми перевіримо. Скасовано без штрафу')
@@ -590,6 +609,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
               refreshPosts()
               return addMatch({
                 id: `m-${inc.reqId}`,
+                reqId: inc.reqId,
                 with: [{ name: r.match.name, age: inc.from.age }],
                 tag: inc.tag,
                 place: inc.place,

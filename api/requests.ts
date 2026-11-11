@@ -3,15 +3,33 @@
  *  POST /api/requests {id, answer: 'yes'|'no', reason?}               answer one sent to you
  *  GET  /api/requests?id=...                                          status of the one you sent
  *  GET  /api/requests?inbox=1                                         pending ones sent to you
+ *  GET  /api/requests?meetings=1                                      today's confirmed meetings
+ *  POST /api/requests {id, cancel: true, uncomfortable?}              cancel a confirmed meeting
  */
 import { json, kv, readJson, readSession } from './_kv.js'
-import { answerReq, createReq, getPost, getReq, inboxView, matchViewForAuthor, reqStatusView, settleExpiry } from './_social.js'
+import {
+  answerReq,
+  cancelMeeting,
+  createReq,
+  getPost,
+  getReq,
+  inboxView,
+  listMeetings,
+  matchViewForAuthor,
+  reqStatusView,
+  settleExpiry,
+} from './_social.js'
 
 export async function POST(request: Request): Promise<Response> {
   const user = readSession(request)
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
   const body = await readJson<Record<string, unknown>>(request)
   if (!body) return json({ ok: false, error: 'bad_json' }, 400)
+
+  if (typeof body.id === 'string' && body.cancel) {
+    const res = await cancelMeeting(body.id, user.id, Boolean(body.uncomfortable))
+    return json(res, res.ok ? 200 : 409)
+  }
 
   if (typeof body.id === 'string' && (body.answer === 'yes' || body.answer === 'no')) {
     const res = await answerReq(body.id, user.id, body.answer === 'yes', body.reason as string | undefined)
@@ -34,6 +52,8 @@ export async function GET(request: Request): Promise<Response> {
   const user = readSession(request)
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
   const params = new URL(request.url).searchParams
+
+  if (params.get('meetings')) return json({ ok: true, meetings: await listMeetings(user.id) })
 
   if (params.get('inbox')) {
     const ids = (await kv('ZRANGEBYSCORE', `inbox:${user.id}`, Date.now(), '+inf')) as string[]

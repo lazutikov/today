@@ -1650,3 +1650,8 @@ html:has(.screen) body {
   height: 100%;
   object-fit: cover;
 }
+
+/* several meetings today: stack the banners with a small gap */
+.plan-banner + .plan-banner {
+  margin-top: 24px;
+}
