@@ -92,6 +92,7 @@ export type EventName =
   | 'spot_auto'
   | 'spot_pick'
   | 'feed_search'
+  | 'feed_filter'
   | 'notif_tap'
   | 'login_error'
 

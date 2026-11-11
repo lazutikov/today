@@ -15,7 +15,7 @@ import { guessGender } from './gender'
 import { NotificationsPage } from './notifications'
 import { rankFeed } from './rank'
 import { filterByQuery } from './search'
-import { useMyLocation, type Coords } from './location'
+import { distanceKm, useMyLocation, type Coords } from './location'
 import { getSpot, isHomeCity, setSpot, useSpot } from './area'
 
 const getSpotKey = () => getSpot().key
@@ -110,6 +110,8 @@ type Overlay =
   | { t: 'reason'; inc: Incoming }
   | { t: 'notifs' }
   | { t: 'spot' }
+  | { t: 'radius' }
+  | { t: 'cats' }
   | null
 
 const ANSWER_SECONDS = 5 * 60
@@ -677,6 +679,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }
 
   const [query, setQuery] = useState('')
+  const [filters, setFiltersRaw] = useState<Filters>(loadFilters)
+  const setFilters = (f: Filters) => {
+    setFiltersRaw(f)
+    saveFilters(f)
+    track('feed_filter', { radius: f.radius ?? 'any', cats: f.cats.length })
+  }
   // Demo cards live in the launch city only; elsewhere the feed is just real people
   const local = (l: FeedCard[]) => (home ? l : l.filter((c) => c.mine))
   const cards = rankFeed(
@@ -687,7 +695,16 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     new Date(),
     from,
   )
-  const shown = filterByQuery(cards, query)
+  const radiusOn = tab === 'events' && filters.radius !== null && Boolean(from)
+  const shown = filterByQuery(cards, query).filter((c) => {
+    if (filters.cats.length && !c.tags.some((t) => filters.cats.includes(t))) return false
+    if (radiusOn) {
+      if (c.lat === undefined || c.lon === undefined) return false
+      return distanceKm(from!, { lat: c.lat, lon: c.lon }) <= filters.radius!
+    }
+    return true
+  })
+  const filtering = Boolean(query.trim()) || filters.cats.length > 0 || radiusOn
   // What people look for (length and result count only, not the words)
   useEffect(() => {
     if (!query.trim()) return
@@ -812,6 +829,35 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         )}
       </div>
 
+      <div className="feed-filters">
+        {tab === 'events' && (
+          <button
+            className={radiusOn ? 'ffilter on' : 'ffilter'}
+            onClick={() => setOverlay({ t: 'radius' })}
+            aria-haspopup="dialog"
+          >
+            📍 {radiusOn ? `До ${filters.radius} км` : 'Будь-де'} <span aria-hidden="true">▾</span>
+          </button>
+        )}
+        <button
+          className={filters.cats.length ? 'ffilter on' : 'ffilter'}
+          onClick={() => setOverlay({ t: 'cats' })}
+          aria-haspopup="dialog"
+        >
+          {filters.cats.length === 0
+            ? 'Усі категорії'
+            : filters.cats.length === 1
+              ? filters.cats[0]
+              : `${filters.cats[0]} +${filters.cats.length - 1}`}{' '}
+          <span aria-hidden="true">▾</span>
+        </button>
+        {(filters.cats.length > 0 || filters.radius !== null) && (
+          <button className="ffilter-reset" onClick={() => setFilters({ radius: null, cats: [] })}>
+            Скинути
+          </button>
+        )}
+      </div>
+
       <ul className="cards" id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {shown.map((card) => (
           <li key={card.id}>
@@ -825,15 +871,27 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             />
           </li>
         ))}
-        {query.trim() && shown.length === 0 && cards.length > 0 && (
+        {filtering && shown.length === 0 && cards.length > 0 && (
           <li className="search-empty">
             <p>
-              За «{query.trim()}» нічого {tab === 'events' ? 'серед планів' : 'серед людей'}.
+              {query.trim() ? `За «${query.trim()}»` : 'За цими фільтрами'} нічого{' '}
+              {tab === 'events' ? 'серед планів' : 'серед людей'}.
             </p>
+            {radiusOn && filters.radius! < 5 && (
+              <button className="dlink" onClick={() => setFilters({ ...filters, radius: filters.radius === 1 ? 3 : 5 })}>
+                Розширити до {filters.radius === 1 ? 3 : 5} км
+              </button>
+            )}
             <button className="dbtn" onClick={() => setOverlay({ t: 'create' })}>
               {tab === 'events' ? 'Створити такий план' : 'Написати, що хочу'}
             </button>
-            <button className="dlink" onClick={() => setQuery('')}>
+            <button
+              className="dlink"
+              onClick={() => {
+                setQuery('')
+                setFilters({ radius: null, cats: [] })
+              }}
+            >
               Показати все
             </button>
           </li>
@@ -851,6 +909,54 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
 
       <Dock tab={tab} onTab={switchTab} onCreate={() => setOverlay({ t: 'create' })} />
 
+      {overlay?.t === 'radius' && (
+        <DarkSheet title="Як далеко" onClose={() => setOverlay(null)}>
+          {!from && (
+            <p className="dtext dsmall">
+              Щоб фільтрувати за відстанню, увімкни локацію або обери адресу вгорі (📍 {spot.label}).
+            </p>
+          )}
+          <div className="dchips">
+            {([null, 1, 3, 5] as const).map((r) => (
+              <button
+                key={String(r)}
+                className={filters.radius === r ? 'dchip on' : 'dchip'}
+                disabled={r !== null && !from}
+                onClick={() => {
+                  setFilters({ ...filters, radius: r })
+                  setOverlay(null)
+                }}
+              >
+                {r === null ? 'Будь-де' : `До ${r} км`}
+              </button>
+            ))}
+          </div>
+          {!from && (
+            <button
+              className="dbtn"
+              onClick={() => {
+                here.request()
+                setOverlay(null)
+              }}
+            >
+              Увімкнути локацію
+            </button>
+          )}
+        </DarkSheet>
+      )}
+      {overlay?.t === 'cats' && (
+        <CatsSheet
+          value={filters.cats}
+          count={(cats) =>
+            filterByQuery(cards, query).filter((c) => !cats.length || c.tags.some((t) => cats.includes(t))).length
+          }
+          onClose={() => setOverlay(null)}
+          onApply={(cats) => {
+            setFilters({ ...filters, cats })
+            setOverlay(null)
+          }}
+        />
+      )}
       {overlay?.t === 'spot' && (
         <SpotPicker
           current={spot}
@@ -1026,6 +1132,74 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         </div>
       )}
     </div>
+  )
+}
+
+/* ---------- Feed filters (remembered for the day) ---------- */
+
+type Filters = { radius: 1 | 3 | 5 | null; cats: string[] }
+const FILTERS_KEY = 'today.filters'
+
+function loadFilters(): Filters {
+  try {
+    const v = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null') as (Filters & { day: string }) | null
+    if (v && v.day === new Date().toDateString()) return { radius: v.radius, cats: v.cats }
+  } catch {
+    /* defaults */
+  }
+  return { radius: null, cats: [] }
+}
+
+function saveFilters(f: Filters) {
+  try {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify({ ...f, day: new Date().toDateString() }))
+  } catch {
+    /* memory only */
+  }
+}
+
+function CatsSheet({
+  value,
+  count,
+  onClose,
+  onApply,
+}: {
+  value: string[]
+  count: (cats: string[]) => number
+  onClose: () => void
+  onApply: (cats: string[]) => void
+}) {
+  const [cats, setCats] = useState(value)
+  const toggle = (t: string) => setCats((c) => (c.includes(t) ? c.filter((x) => x !== t) : [...c, t]))
+  const n = count(cats)
+  return (
+    <DarkSheet title="Категорії" onClose={onClose}>
+      <div className="dchips">
+        {TAGS.map((t) => {
+          const on = cats.includes(t)
+          const c = TAG_COLORS[t]
+          return (
+            <button
+              key={t}
+              className={on ? 'dchip on' : 'dchip'}
+              aria-pressed={on}
+              style={on && c ? { background: c.bg, color: c.fg, borderColor: c.bg } : undefined}
+              onClick={() => toggle(t)}
+            >
+              {t}
+            </button>
+          )
+        })}
+      </div>
+      <button className="dbtn" onClick={() => onApply(cats)}>
+        {n > 0 ? `Показати ${n}` : 'Нікого з такими категоріями'}
+      </button>
+      {cats.length > 0 && (
+        <button className="dlink" onClick={() => setCats([])}>
+          Скинути
+        </button>
+      )}
+    </DarkSheet>
   )
 }
 

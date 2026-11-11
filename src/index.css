@@ -2552,3 +2552,60 @@ html:has(.screen) body {
 .search-empty .dbtn {
   width: 100%;
 }
+
+/* ---------- Feed filters row ---------- */
+
+.feed-filters {
+  display: flex;
+  gap: 6px;
+  margin: 16px 6.5px -8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ffilter {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--f-card, #fff);
+  color: var(--f-text, #000);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ffilter span {
+  font-size: 10px;
+  color: #a7a7a7;
+}
+
+.ffilter.on {
+  background: #000;
+  color: #fff;
+}
+
+.ffilter.on span {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ffilter-reset {
+  flex: none;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: #575757;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* the search sits closer to its filter row */
+.feed-search + .feed-filters {
+  margin-top: 8px;
+}
