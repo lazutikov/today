@@ -1,7 +1,8 @@
 /**
  * Pick a place like in a taxi app: the pin stays in the middle, the map moves
- * under it; search with suggestions on top. Map: Leaflet + CARTO light tiles
- * (plain images, no WebGL or workers, so it works on any phone).
+ * under it; search with suggestions on top. Map: Leaflet + OpenStreetMap's own
+ * tiles (plain images, no key, no WebGL or workers, works on any phone). Their
+ * usage policy fits light traffic like ours; switch to a keyed provider at scale.
  */
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
@@ -37,10 +38,9 @@ export default function PlacePicker({
       [start.lat, start.lon],
       initial ? 17 : 14,
     )
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap contributors © CARTO',
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
     })
       .on('tileload', () => (loaded = true))
       .addTo(m)

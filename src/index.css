@@ -2161,3 +2161,8 @@ html:has(.screen) body {
   right: auto;
   left: 14px;
 }
+
+/* OSM's default tiles are busy: calm them down to sit with the light UI */
+.picker .leaflet-tile-pane {
+  filter: saturate(0.55) brightness(1.04) contrast(0.95);
+}
