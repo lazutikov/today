@@ -80,7 +80,8 @@ export type LocState = 'unknown' | 'asking' | 'on' | 'denied' | 'off' | 'far'
 export const inCity = (c: Coords) => distanceKm(c, cityCenter()) <= MAX_FROM_CITY_KM
 
 /** My position for distances: silent if already allowed, otherwise on request(). */
-export function useMyLocation() {
+/** autoAsk: ask for the location right away when the app opens (once per visit) */
+export function useMyLocation(autoAsk = false) {
   const [coords, setCoordsRaw] = useState<Coords | null>(saved)
   const [state, setState] = useState<LocState>(coords ? 'on' : 'unknown')
   const setCoords = (c: Coords) => {
@@ -90,14 +91,26 @@ export function useMyLocation() {
 
   useEffect(() => {
     if (coords) return
+    const askOnce = () => {
+      try {
+        if (!autoAsk || sessionStorage.getItem('today.locAsked')) return
+        sessionStorage.setItem('today.locAsked', '1')
+      } catch {
+        if (!autoAsk) return
+      }
+      request()
+    }
     // Already allowed earlier: no prompt will show, so just take it
+    if (!navigator.permissions) return askOnce()
     navigator.permissions
-      ?.query({ name: 'geolocation' as PermissionName })
+      .query({ name: 'geolocation' as PermissionName })
       .then((p) => {
         if (p.state === 'granted') locate().then((c) => setCoords(c) && setState('on')).catch(() => {})
         else if (p.state === 'denied') setState('denied')
+        // Not decided yet: ask straight away when the app opens
+        else askOnce()
       })
-      .catch(() => {})
+      .catch(askOnce)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

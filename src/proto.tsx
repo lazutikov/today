@@ -273,7 +273,8 @@ function FeedApp({ onSignOut, onOnboarding }: { onSignOut: () => void; onOnboard
   )
   const [realPosts, setRealPosts] = useState<FeedCard[]>([])
   // Position for distances: never leaves the phone
-  const here = useMyLocation()
+  // Ask for the location as soon as the app opens, unless a place was picked by hand
+  const here = useMyLocation(getSpot().mode !== 'manual')
   // "Звідки": the city the feed is about (follows the phone unless picked by hand)
   const spot = useSpot()
   const home = isHomeCity(spot)
