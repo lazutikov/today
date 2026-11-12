@@ -3,7 +3,7 @@
  *  POST   /api/posts             publish (replaces your previous post of the same kind)
  *  DELETE /api/posts?id=...      remove your post
  */
-import { cleanCity, json, kvReady, readJson, readSession } from './_kv.js'
+import { cleanCity, isBlocked, json, kvReady, readJson, readSession } from './_kv.js'
 import { cleanPost, deletePost, listPosts, pingNearby, publicCard, savePost } from './_social.js'
 
 export async function GET(request: Request): Promise<Response> {
@@ -18,6 +18,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const user = readSession(request)
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
+  if (await isBlocked(user.id)) return json({ ok: false, error: 'blocked' }, 403)
   const body = await readJson<Record<string, unknown>>(request)
   const post = body && cleanPost(body, user)
   if (!post) return json({ ok: false, error: 'bad_post' }, 400)

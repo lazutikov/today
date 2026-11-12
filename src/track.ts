@@ -21,6 +21,15 @@ if (PH_KEY && typeof window !== 'undefined') {
       (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData,
     )
     posthog.register({ entry: inTelegram ? 'telegram' : 'site' })
+    // Anything that breaks on someone's phone shows up in PostHog (Error tracking)
+    const report = (err: unknown, kind: string) => {
+      const e = err instanceof Error ? err : new Error(String(err))
+      const ph = posthog as unknown as { captureException?: (e: Error, p?: Record<string, unknown>) => void }
+      if (ph.captureException) ph.captureException(e, { kind })
+      else posthog.capture('client_error', { kind, message: e.message, stack: e.stack?.slice(0, 1500) })
+    }
+    window.addEventListener('error', (ev) => report(ev.error ?? ev.message, 'error'))
+    window.addEventListener('unhandledrejection', (ev) => report(ev.reason, 'promise'))
   } catch {
     /* analytics must never break the UI */
   }
@@ -93,6 +102,7 @@ export type EventName =
   | 'spot_pick'
   | 'feed_search'
   | 'feed_filter'
+  | 'api_error'
   | 'notif_tap'
   | 'login_error'
 

@@ -68,8 +68,37 @@ export function readSession(request: Request): SessionUser | null {
 
 /* ---------- Kyiv day: posts live until local midnight ---------- */
 
-export function kyivDay(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date())
+export function kyivDay(daysAgo = 0): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date(Date.now() - daysAgo * 86400000))
+}
+
+/** Server-side analytics event (same PostHog project as the app) */
+export async function phCapture(event: string, distinctId: string, properties: Record<string, unknown> = {}) {
+  const key = process.env.VITE_POSTHOG_KEY
+  if (!key) return
+  try {
+    await fetch(`${process.env.VITE_POSTHOG_HOST || 'https://eu.i.posthog.com'}/i/v0/e/`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ api_key: key, event, distinct_id: distinctId, properties: { ...properties, source: 'server' } }),
+    })
+  } catch {
+    /* analytics must not break anything */
+  }
+}
+
+/* ---------- Owner (gets reports, can block) ---------- */
+
+/** Telegram username of the service owner; their chat id is remembered on their first message to the bot */
+export const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'lazutikov').toLowerCase()
+
+export async function ownerId(): Promise<number | null> {
+  const v = await kv('GET', 'owner:id')
+  return v ? Number(v) : null
+}
+
+export async function isBlocked(userId: number): Promise<boolean> {
+  return Number(await kv('SISMEMBER', 'blocked', userId)) === 1
 }
 
 /** Minutes since local midnight in Kyiv (0..1439). */

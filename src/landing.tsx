@@ -15,6 +15,7 @@ import {
 import { identify, track } from './track'
 import { AreaPicker, GenderAge, Sticker } from './ui'
 import { fetchMe, isLive } from './live'
+import { getSpot, isHomeCity } from './area'
 
 function TelegramIcon() {
   return (
@@ -244,7 +245,9 @@ export function Onboarding({
   onDone: (p: Profile) => void
 }) {
   const [bio, setBio] = useState(profile.bio)
-  const [areas, setAreas] = useState<string[]>(profile.areas ?? [])
+  // Districts exist only for the launch city; elsewhere the person covers the whole city
+  const home = isHomeCity(getSpot())
+  const [areas, setAreas] = useState<string[]>(home ? (profile.areas ?? []) : ['Все місто'])
   const [ga, setGa] = useState<Pick<Profile, 'gender' | 'age'>>({
     gender: profile.gender,
     age: profile.age,
@@ -296,10 +299,14 @@ export function Onboarding({
           onChange={(e) => setBio(e.target.value)}
         />
 
-        <p className="dlabel">
-          Де тобі зручно зустрічатися? <span className="dopt">до {MAX_AREAS}</span>
-        </p>
-        <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
+        {home && (
+          <>
+            <p className="dlabel">
+              Де тобі зручно зустрічатися? <span className="dopt">до {MAX_AREAS}</span>
+            </p>
+            <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
+          </>
+        )}
 
         <p className="dlabel">
           Стать і вік <span className="dopt">необов’язково, видно на твоїх постах</span>

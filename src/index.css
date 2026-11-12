@@ -2657,3 +2657,16 @@ html:has(.screen) body {
   font-weight: 700;
   box-shadow: 0 0 0 2px var(--f-bg, #ebebeb);
 }
+
+.near-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.place-btn b .ico {
+  width: 16px;
+  height: 16px;
+  vertical-align: -2px;
+  color: var(--f-accent);
+}

@@ -424,6 +424,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         own_post: 'Це твій пост',
         post_gone: 'Цей план уже неактуальний',
         taken: 'Ця людина вже знайшла компанію на сьогодні',
+        blocked: 'Твій акаунт обмежено після скарги. Якщо це помилка, напиши нам у Telegram.',
         conflict: res.message ?? 'У тебе вже є зустріч на цей час',
       }
       setOverlay(null)
@@ -1580,7 +1581,8 @@ function ProfileSheet({
     gender: profile.gender,
     age: profile.age,
   })
-  const [areas, setAreas] = useState<string[]>(profile.areas ?? [])
+  const home = isHomeCity(getSpot())
+  const [areas, setAreas] = useState<string[]>(home ? (profile.areas ?? []) : ['Все місто'])
   const [notify, setNotify] = useState(profile.notify !== false)
   const [error, setError] = useState<string | null>(null)
   return (
@@ -1611,10 +1613,16 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
-      <p className="dlabel">
-        Мої райони <span className="dopt">до {MAX_AREAS}</span>
-      </p>
-      <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
+      {home ? (
+        <>
+          <p className="dlabel">
+            Мої райони <span className="dopt">до {MAX_AREAS}</span>
+          </p>
+          <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
+        </>
+      ) : (
+        <p className="dtext dsmall">Райони: усе місто {getSpot().city}.</p>
+      )}
       {error && <p className="derror">{error}</p>}
       <button
         className={notify ? 'dtoggle on' : 'dtoggle'}
@@ -1874,7 +1882,7 @@ function CreateSheet({
                   setPicking(false)
                   setError(null)
                   // A plan happens at one venue: its district comes from the map when we can tell
-                  if (p.area && home) setAreas([p.area])
+                  if (p.area) setAreas([p.area])
                 }}
               />
             </Suspense>

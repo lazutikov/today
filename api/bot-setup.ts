@@ -33,6 +33,12 @@ export async function GET(request: Request): Promise<Response> {
         'Пишеш, що хочеш сьогодні, і за кілька хвилин маєш план і людей поруч.\n\n' +
         'Натисни «Почати» внизу, щоб увійти. Без пароля і номера телефону.',
     }),
+    call('setMyCommands', {
+      commands: [
+        { command: 'start', description: 'Відкрити today' },
+        { command: 'delete', description: 'Видалити мої дані' },
+      ],
+    }),
     call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Відкрити', web_app: { url: `${site}/app` } } }),
   ])
 

@@ -5,6 +5,7 @@
 import type { FeedCard } from './feed'
 import type { Profile } from './profile'
 import { loadSession } from './telegram'
+import { track } from './track'
 
 export const isLive = () => Boolean(loadSession())
 
@@ -14,6 +15,8 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${loadSession() ?? ''}`, ...(init.headers || {}) },
   })
   const body = await res.json().catch(() => ({ ok: false, error: 'bad_response' }))
+  if (res.status >= 500 || (body as { error?: string }).error === 'bad_response')
+    track('api_error', { path: path.split('?')[0], status: res.status })
   return body as T
 }
 

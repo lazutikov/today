@@ -2,11 +2,13 @@
  * Telegram bot webhook.
  *  /start login_<code>  confirms a website sign-in and says "go back to the site"
  *  /start (anything)    greets and offers to open the prototype inside Telegram
+ *  /delete              removes the person's data (after a confirm button)
+ *  buttons: Так/Ні on requests, «Зустрілися?» answers, mute, owner's Block
  * Telegram proves it is Telegram with the secret_token set in /api/bot-setup.
  */
 import { createHash } from 'node:crypto'
-import { CODE_RE, CODE_TTL, json, kv, kvReady, tg } from './_kv.js'
-import { answerReq } from './_social.js'
+import { CODE_RE, CODE_TTL, json, kv, kvReady, ownerId, OWNER_USERNAME, phCapture, tg } from './_kv.js'
+import { answerReq, deleteUser, saveOutcome, type Outcome } from './_social.js'
 import { setNotify } from './_profile.js'
 
 export function webhookSecret(token: string) {
@@ -14,7 +16,12 @@ export function webhookSecret(token: string) {
 }
 
 type Update = {
-  callback_query?: { id: string; from: { id: number }; data?: string }
+  callback_query?: {
+    id: string
+    from: { id: number; username?: string }
+    data?: string
+    message?: { chat: { id: number }; message_id: number; text?: string }
+  }
   message?: {
     chat: { id: number }
     text?: string
@@ -29,8 +36,56 @@ export async function POST(request: Request): Promise<Response> {
 
   const update = (await request.json()) as Update
 
-  // "Так" / "Ні" under an invite or join request
   const cb = update.callback_query
+
+  // «Зустрілися?» the morning after
+  if (cb?.data?.startsWith('m:')) {
+    const [, id, outcome] = cb.data.split(':')
+    const ok = await saveOutcome(id, cb.from.id, outcome as Outcome)
+    const label = { met: 'Зустрілися 👍', noshow: 'Не прийшли', off: 'Скасували' }[outcome as Outcome] ?? ''
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: ok ? 'Дякуємо, це дуже допомагає!' : 'Не знайшли цю зустріч' })
+    if (ok && cb.message)
+      await tg('editMessageText', {
+        chat_id: cb.message.chat.id,
+        message_id: cb.message.message_id,
+        text: `${cb.message.text ?? ''}\n\nТвоя відповідь: ${label}. Дякуємо!`,
+      })
+    return json({ ok: true })
+  }
+
+  // Owner's decision on a report
+  if (cb?.data?.startsWith('block:') || cb?.data === 'noop') {
+    const owner = await ownerId()
+    if (!owner || cb.from.id !== owner) {
+      await tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Це не для тебе' })
+      return json({ ok: true })
+    }
+    if (cb.data.startsWith('block:')) {
+      const target = Number(cb.data.split(':')[1])
+      await kv('SADD', 'blocked', target)
+      await phCapture('user_blocked', String(target))
+    }
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: cb.data === 'noop' ? 'Залишили' : 'Заблоковано' })
+    if (cb.message)
+      await tg('editMessageReplyMarkup', { chat_id: cb.message.chat.id, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } })
+    return json({ ok: true })
+  }
+
+  // Delete my data: confirmed
+  if (cb?.data === 'del:yes') {
+    await deleteUser(cb.from.id)
+    await phCapture('user_deleted', String(cb.from.id))
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Видалено' })
+    if (cb.message)
+      await tg('editMessageText', {
+        chat_id: cb.message.chat.id,
+        message_id: cb.message.message_id,
+        text: 'Готово: твій профіль, пости й сповіщення видалено. Якщо захочеш повернутися, просто увійди знову.',
+      })
+    return json({ ok: true })
+  }
+
+  // "Так" / "Ні" under an invite or join request
   if (cb?.data === 'mute') {
     await setNotify(cb.from.id, false)
     await tg('answerCallbackQuery', {
@@ -57,6 +112,17 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const msg = update.message
+  // The owner is recognised by username; remember their chat to send reports there
+  if (msg?.from?.username && msg.from.username.toLowerCase() === OWNER_USERNAME)
+    await kv('SET', 'owner:id', msg.from.id)
+
+  if (msg?.from && msg.text?.startsWith('/delete')) {
+    await send(token, msg.chat.id, 'Видалити твої дані з today? Профіль, твої пости на сьогодні та сповіщення зникнуть.', {
+      inline_keyboard: [[{ text: 'Так, видалити', callback_data: 'del:yes' }]],
+    })
+    return json({ ok: true })
+  }
+
   if (!msg?.from || !msg.text?.startsWith('/start')) return json({ ok: true })
 
   const site = `https://${request.headers.get('host')}`

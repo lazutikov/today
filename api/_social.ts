@@ -4,6 +4,9 @@
  */
 import {
   cleanCity,
+  isBlocked,
+  ownerId,
+  phCapture,
   contactUrl,
   esc,
   kv,
@@ -175,7 +178,68 @@ export async function listPosts(city: string): Promise<Post[]> {
   const ids = (await kv('ZRANGE', feedKey(city), 0, 99, 'REV')) as string[]
   if (!ids.length) return []
   const raws = (await kv('MGET', ...ids.map((i) => `post:${i}`))) as (string | null)[]
-  return raws.filter((r): r is string => Boolean(r)).map((r) => JSON.parse(r) as Post)
+  const blocked = new Set(((await kv('SMEMBERS', 'blocked')) as string[]).map(Number))
+  return raws
+    .filter((r): r is string => Boolean(r))
+    .map((r) => JSON.parse(r) as Post)
+    .filter((p) => !blocked.has(p.authorId))
+}
+
+/* ---------- Morning check-in: did yesterday's meetings happen? ---------- */
+
+export type Outcome = 'met' | 'noshow' | 'off'
+
+export async function askYesterday(): Promise<number> {
+  const day = kyivDay(1)
+  const ids = (await kv('SMEMBERS', `meetings:${day}`)) as string[]
+  let asked = 0
+  for (const id of ids) {
+    const r = await getReq(id)
+    if (!r || r.status !== 'yes') continue
+    if ((await kv('SET', `checkin:${id}`, '1', 'EX', 7 * 86400, 'NX')) === null) continue // already asked
+    for (const [me, other] of [
+      [r.from, r.to],
+      [r.to, r.from],
+    ] as const) {
+      const res = await tg('sendMessage', {
+        chat_id: me.id,
+        parse_mode: 'HTML',
+        text: `Доброго ранку! Вчора о ${esc(r.time)} була зустріч з ${mention(other)}: «${esc(r.postHeadline)}».\n\nЯк пройшло?`,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Зустрілися 👍', callback_data: `m:${id}:met` }],
+            [
+              { text: 'Не прийшли', callback_data: `m:${id}:noshow` },
+              { text: 'Скасували', callback_data: `m:${id}:off` },
+            ],
+          ],
+        },
+      })
+      if (res.ok) asked++
+    }
+  }
+  return asked
+}
+
+export async function saveOutcome(id: string, userId: number, outcome: Outcome): Promise<boolean> {
+  const r = await getReq(id)
+  if (!r || (r.from.id !== userId && r.to.id !== userId)) return false
+  await kv('SET', `outcome:${id}:${userId}`, outcome, 'EX', 30 * 86400)
+  await phCapture('meeting_outcome', String(userId), { outcome, tag: r.tag, type: r.type, req: id })
+  return true
+}
+
+/** "Delete my data": profile, own posts, notifications, photo link */
+export async function deleteUser(userId: number) {
+  const { getProfile } = await import('./_profile.js')
+  const p = await getProfile(userId)
+  for (const a of p?.areas ?? []) await kv('SREM', `area:${p!.city}:${a}`, userId)
+  for (const kind of ['person', 'event']) {
+    const postId = (await kv('GET', `mypost:${userId}:${kind}`)) as string | null
+    if (postId) await deletePost(postId, userId)
+    await kv('DEL', `mypost:${userId}:${kind}`)
+  }
+  await kv('DEL', `profile:${userId}`, `notif:${userId}`, `notifseen:${userId}`, `tgphoto:${userId}`, `matches:${userId}`, `inbox:${userId}`)
 }
 
 /* ---------- Notifications: everything the bot says, also kept for the app ---------- */
@@ -298,6 +362,7 @@ export async function createReq(
   input: { place?: string; time?: string; gender?: string; age?: number; bio?: string; lat?: number; lon?: number; address?: string },
 ): Promise<{ ok: true; req: Req } | { ok: false; error: string; message?: string }> {
   if (post.authorId === user.id) return { ok: false, error: 'own_post' }
+  if (await isBlocked(user.id)) return { ok: false, error: 'blocked' }
   if (post.matched) return { ok: false, error: 'taken' }
   if (post.kind === 'event' && (post.taken ?? 0) >= (post.capacity ?? 2)) return { ok: false, error: 'full' }
   const wantTime = post.kind === 'event' ? post.time : str(input.time, 20) || post.time
@@ -401,6 +466,8 @@ export async function answerReq(
 
   if (yes) {
     // Both sides keep today's meetings, so the app shows them after a reload or a "Так" tapped in the bot.
+    await kv('SADD', `meetings:${kyivDay()}`, r.id)
+    await kv('EXPIRE', `meetings:${kyivDay()}`, 3 * 86400)
     const ttl = secondsToKyivMidnight() + 3 * 3600
     for (const uid of [r.from.id, r.to.id]) {
       await kv('ZADD', `matches:${uid}`, r.createdAt, r.id)
@@ -556,7 +623,28 @@ export async function cancelMeeting(id: string, userId: number, uncomfortable: b
   r.cancelledBy = userId
   r.reported = uncomfortable
   await putReq(r)
-  if (uncomfortable) await kv('LPUSH', 'reports', JSON.stringify({ req: r.id, by: userId, at: Date.now() }))
+  if (uncomfortable) {
+    await kv('LPUSH', 'reports', JSON.stringify({ req: r.id, by: userId, at: Date.now() }))
+    const reporter = r.from.id === userId ? r.from : r.to
+    const other = r.from.id === userId ? r.to : r.from
+    const owner = await ownerId()
+    if (owner)
+      await tg('sendMessage', {
+        chat_id: owner,
+        parse_mode: 'HTML',
+        text:
+          `⚠️ <b>Скарга «Мені некомфортно»</b>\n\n` +
+          `Від: ${mention(reporter)}\nНа: ${mention(other)}\n` +
+          `План: «${esc(r.postHeadline)}»\n${whereWhen(r.place, r.address, r.time)}`,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: `Заблокувати ${other.first_name}`, callback_data: `block:${other.id}` }],
+            [{ text: 'Залишити', callback_data: 'noop' }],
+          ],
+        },
+      })
+    await phCapture('report', String(userId), { req: r.id })
+  }
 
   const p = await getPost(r.postId)
   if (p) {

@@ -35,6 +35,12 @@ export function travelLabel(km: number): string {
   return `~${round(((km * 1.4) / 25) * 60 + 4)} хв на таксі`
 }
 
+/** About 500 m grid: enough for "~2 км", not enough to find a building */
+export function roundPoint<T extends Coords>(c: T): T {
+  const r = (v: number) => Math.round(v / 0.005) * 0.005
+  return { ...c, lat: Number(r(c.lat).toFixed(3)), lon: Number(r(c.lon).toFixed(3)) }
+}
+
 /** 450 м · 1,2 км · 12 км */
 export function formatDistance(km: number): string {
   if (km < 1) return `${Math.max(50, Math.round((km * 1000) / 50) * 50)} м`

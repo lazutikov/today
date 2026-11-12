@@ -75,8 +75,14 @@ function toPlace(f: Feature): Place {
   const text = [p.district, p.locality, p.county].filter(Boolean).join(' ')
   const lat = f.geometry.coordinates[1]
   const lon = f.geometry.coordinates[0]
+  // Lviv: our own district names; elsewhere whatever district the map gives («Шевченківський район» → «Шевченківський»)
   const area =
-    getSpot().key === 'lviv' ? (LVIV_AREAS.find(([re]) => re.test(text))?.[1] ?? nearestArea(lat, lon)) : undefined
+    getSpot().key === 'lviv'
+      ? (LVIV_AREAS.find(([re]) => re.test(text))?.[1] ?? nearestArea(lat, lon))
+      : (p.district || p.city_district || '')
+          .replace(/\s*(район|district|dzielnica)$/i, '')
+          .replace(/^(район|dzielnica)\s+/i, '')
+          .trim() || undefined
   return { name, address, lat, lon, area }
 }
 
@@ -157,4 +163,19 @@ export async function spotAt(lat: number, lon: number, signal?: AbortSignal): Pr
     mode: 'auto',
     precise: true,
   }
+}
+
+/** "біля Ботсаду", "Сихів": a neighbourhood-ish name for a point, never a street number */
+export async function nearLabel(lat: number, lon: number, signal?: AbortSignal): Promise<string> {
+  try {
+    const res = await fetch(`${PHOTON}/reverse?lat=${lat}&lon=${lon}&limit=1`, { signal })
+    const f = ((await res.json()) as { features: Feature[] }).features[0]
+    const p = f?.properties ?? {}
+    const raw = p.locality || p.district || p.street || p.city || ''
+    const clean = raw.replace(/\s*район$/i, '').trim()
+    if (clean) return p.street && raw === p.street ? `біля ${clean.replace(/^вулиця /i, 'вул. ')}` : clean
+  } catch {
+    /* fall through */
+  }
+  return nearestArea(lat, lon) ?? 'поруч'
 }
