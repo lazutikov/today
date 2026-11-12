@@ -2670,3 +2670,33 @@ html:has(.screen) body {
   vertical-align: -2px;
   color: var(--f-accent);
 }
+
+.my-place {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: #ebebeb;
+}
+
+.my-place span .ico {
+  width: 16px;
+  height: 16px;
+  vertical-align: -2px;
+  color: var(--f-accent);
+}
+
+.my-place .dlink {
+  margin: 0;
+  width: auto;
+  padding: 0;
+}
+
+.fcard-row .fcard-near {
+  margin: 0;
+  font-size: 15px;
+  line-height: 21px;
+}

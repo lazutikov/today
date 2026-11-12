@@ -173,3 +173,28 @@ export function cleanCity(v: unknown): string {
   const s = typeof v === 'string' ? v.trim().toLowerCase() : ''
   return /^[\p{L}\p{N} '’.-]{2,40}$/u.test(s) ? s : 'lviv'
 }
+
+export type Near = { lat: number; lon: number; label: string }
+
+/** A rough point (~500 m grid): enough for "~2 км", never a door. */
+export function cleanNear(v: unknown): Near | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const lat = Number(o.lat)
+  const lon = Number(o.lon)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return undefined
+  const r = (x: number) => Number((Math.round(x / 0.005) * 0.005).toFixed(3))
+  const label = typeof o.label === 'string' ? o.label.trim().slice(0, 60) : ''
+  return { lat: r(lat), lon: r(lon), label: label || 'поруч' }
+}
+
+export const REACH = [2, 5, 10]
+export const cleanReach = (v: unknown) => (REACH.includes(Number(v)) ? Number(v) : 5)
+
+export function km(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const R = 6371
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}

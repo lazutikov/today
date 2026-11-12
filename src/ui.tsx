@@ -1,4 +1,4 @@
-import { distanceKm, travelLabel, type Coords } from './location'
+import { type Coords, distanceKm, formatDistance, travelLabel } from './location'
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { AREAS, MAX_AREAS, TAG_COLORS, WHOLE_CITY, type FeedCard } from './feed'
 
@@ -161,6 +161,11 @@ export function placeLine(
   return [far, area, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
 }
 
+/** The point is rounded to ~500 m, so don't pretend to know metres */
+function roughDistance(km: number) {
+  return km < 1 ? 'до 1 км' : `~${formatDistance(km)}`
+}
+
 /* ---------- Card (Figma "Frame 20") ---------- */
 
 export function CardView({
@@ -193,6 +198,18 @@ export function CardView({
             <div>
               <p className="fcard-venue">{card.venue}</p>
               <p className="fcard-addr">{placeLine(card, from)}</p>
+            </div>
+          </div>
+        ) : card.near ? (
+          <div className="fcard-row">
+            <PinIcon />
+            <div>
+              <p className="fcard-near">{[from ? roughDistance(distanceKm(from, card.near)) : '', card.near.label].filter(Boolean).join(' · ')}</p>
+              {showTags && card.reach && (
+                <p className="fcard-addr">
+                  Готов{card.gender === 'Жінка' ? 'а' : card.gender === 'Чоловік' ? 'ий' : 'і'} доїхати до {card.reach} км
+                </p>
+              )}
             </div>
           </div>
         ) : (

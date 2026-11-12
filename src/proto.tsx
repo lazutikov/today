@@ -4,10 +4,10 @@
  * the server, and requests to them reach a real person through the bot.
  */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { mapsLink, type Place } from './places'
+import { mapsLink, nearestArea, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
-import { CITY, EVENTS, formatAreas, INVITERS, MAX_AREAS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
+import { CITY, EVENTS, formatAreas, INVITERS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
@@ -15,7 +15,8 @@ import { guessGender } from './gender'
 import { NotificationsPage } from './notifications'
 import { rankFeed } from './rank'
 import { filterByQuery } from './search'
-import { distanceKm, useMyLocation, type Coords } from './location'
+import { cardPoint, distanceKm, roundPoint, useMyLocation, type Coords } from './location'
+import { NearField, ReachChips, type Near } from './NearField'
 import { getSpot, isHomeCity, setSpot, useSpot } from './area'
 
 const getSpotKey = () => getSpot().key
@@ -41,7 +42,6 @@ import {
   sendRequest,
 } from './live'
 import {
-  AreaPicker,
   CardView,
   DarkSheet,
   Dock,
@@ -160,8 +160,8 @@ export default function Proto() {
     setStage('connecting')
     fetchMe()
       .then(({ profile }) => {
-        if (profile && profile.areas?.length) {
-          saveProfile({ bio: profile.bio, areas: profile.areas, gender: profile.gender, age: profile.age, notify: profile.notify })
+        if (profile && (profile.areas?.length || profile.places?.length || profile.updatedAt)) {
+          saveProfile({ bio: profile.bio, areas: profile.areas, gender: profile.gender, age: profile.age, notify: profile.notify, places: profile.places, radius: profile.radius })
           setSignedIn(true)
           track('profile_restored')
           setStage('app')
@@ -366,7 +366,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         saveProfileRemote(loadProfile(), getSpotKey()) // first time on the server: upload what this device has
         return
       }
-      const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify }
+      const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify, places: remote.places, radius: remote.radius }
       setProfile(next)
       saveProfile(next)
     })
@@ -692,16 +692,16 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     tab === 'people'
       ? [...realPosts.filter((c) => c.kind === 'person'), ...local(people)]
       : [...realPosts.filter((c) => c.kind === 'event'), ...local(events)],
-    home ? profile.areas : [],
+    home ? (profile.areas ?? []) : [],
     new Date(),
     from,
   )
-  const radiusOn = tab === 'events' && filters.radius !== null && Boolean(from)
+  const radiusOn = filters.radius !== null && Boolean(from)
   const shown = filterByQuery(cards, query).filter((c) => {
     if (filters.cats.length && !c.tags.some((t) => filters.cats.includes(t))) return false
     if (radiusOn) {
-      if (c.lat === undefined || c.lon === undefined) return false
-      return distanceKm(from!, { lat: c.lat, lon: c.lon }) <= filters.radius!
+      const pt = cardPoint(c)
+      return pt ? distanceKm(from!, pt) <= filters.radius! : false
     }
     return true
   })
@@ -899,15 +899,15 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <FiltersSheet
           value={filters}
           available={TAGS.filter((t) => cards.some((c) => c.tags.includes(t)))}
-          withRadius={tab === 'events'}
+          withRadius
           canRadius={Boolean(from)}
           placeLabel={spot.label}
           count={(f) =>
             filterByQuery(cards, query).filter((c) => {
               if (f.cats.length && !c.tags.some((t) => f.cats.includes(t))) return false
-              if (tab === 'events' && f.radius !== null && from) {
-                if (c.lat === undefined || c.lon === undefined) return false
-                return distanceKm(from, { lat: c.lat, lon: c.lon }) <= f.radius
+              if (f.radius !== null && from) {
+                const pt = cardPoint(c)
+                return pt ? distanceKm(from, pt) <= f.radius : false
               }
               return true
             }).length
@@ -1012,7 +1012,6 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'create' && (
         <CreateSheet
           profile={profile}
-          home={home}
           onClose={() => setOverlay(null)}
           onPublish={publish}
         />
@@ -1581,8 +1580,8 @@ function ProfileSheet({
     gender: profile.gender,
     age: profile.age,
   })
-  const home = isHomeCity(getSpot())
-  const [areas, setAreas] = useState<string[]>(home ? (profile.areas ?? []) : ['Все місто'])
+  const [places, setPlaces] = useState<Near[]>(profile.places ?? [])
+  const [radius, setRadius] = useState(profile.radius ?? 5)
   const [notify, setNotify] = useState(profile.notify !== false)
   const [error, setError] = useState<string | null>(null)
   return (
@@ -1613,15 +1612,28 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
-      {home ? (
-        <>
-          <p className="dlabel">
-            Мої райони <span className="dopt">до {MAX_AREAS}</span>
-          </p>
-          <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
-        </>
-      ) : (
-        <p className="dtext dsmall">Райони: усе місто {getSpot().city}.</p>
+      <p className="dlabel">
+        Мої місця <span className="dopt">до 2, наприклад дім і робота</span>
+      </p>
+      {places.map((pl, i) => (
+        <div className="my-place" key={pl.lat + ':' + pl.lon}>
+          <span>
+            <PinIcon /> {pl.label}
+          </span>
+          <button className="dlink" onClick={() => setPlaces(places.filter((_, j) => j !== i))}>
+            Прибрати
+          </button>
+        </div>
+      ))}
+      {places.length < 2 && (
+        <NearField
+          value={null}
+          placeholder={places.length ? 'Додати ще одне місце' : 'Додай місце, звідки тобі зручно'}
+          onChange={(n) => {
+            setPlaces([...places, n])
+            setError(null)
+          }}
+        />
       )}
       {error && <p className="derror">{error}</p>}
       <button
@@ -1632,15 +1644,22 @@ function ProfileSheet({
       >
         <span className="dtoggle-text">
           <b>Нові плани поруч</b>
-          <span>Бот напише, коли хтось у твоїх районах шукає компанію. Не частіше 2 разів на день.</span>
+          <span>Бот напише, коли поруч з твоїми місцями хтось шукає компанію. Не частіше 2 разів на день.</span>
         </span>
         <span className="dtoggle-knob" aria-hidden="true" />
       </button>
+      {notify && (
+        <>
+          <p className="dlabel">Як далеко від моїх місць</p>
+          <ReachChips value={radius} onChange={setRadius} />
+        </>
+      )}
       <button
         className="dbtn"
         onClick={() => {
-          if (areas.length === 0) return setError('Обери хоча б один район')
-          onSave({ ...profile, ...ga, bio: bio.trim(), areas, notify })
+          if (notify && places.length === 0) return setError('Додай хоча б одне місце, щоб бот знав, що «поруч»')
+          const areas = places.map((pl) => nearestArea(pl.lat, pl.lon) ?? 'Все місто')
+          onSave({ ...profile, ...ga, bio: bio.trim(), areas, places, radius, notify })
         }}
       >
         Зберегти
@@ -1654,13 +1673,10 @@ function ProfileSheet({
 
 function CreateSheet({
   profile,
-  home,
   onClose,
   onPublish,
 }: {
   profile: Profile
-  /** Launch city: has our districts. Elsewhere a post covers the whole city. */
-  home: boolean
   onClose: () => void
   onPublish: (card: FeedCard) => void
 }) {
@@ -1669,9 +1685,16 @@ function CreateSheet({
   const [from, setFrom] = useState('18:00')
   const [to, setTo] = useState('21:00')
   const [at, setAt] = useState('20:00')
-  const [areas, setAreas] = useState<string[]>(home ? (profile.areas ?? []) : ['Все місто'])
+  const [areas, setAreas] = useState<string[]>(['Все місто'])
   const [venue, setVenue] = useState<Place | null>(null)
   const [picking, setPicking] = useState(false)
+  // Free time: roughly where I'll be, from my places or the feed's «Звідки»
+  const spotNow = getSpot()
+  const [near, setNear] = useState<Near | null>(
+    profile.places?.[0] ??
+      (spotNow.precise ? { ...roundPoint({ lat: spotNow.lat, lon: spotNow.lon }), label: spotNow.label } : null),
+  )
+  const [reach, setReach] = useState(5)
   /** How many people the author is looking for (not counting themselves) */
   const [seats, setSeats] = useState(1)
   const [tags, setTags] = useState<string[]>([])
@@ -1713,9 +1736,7 @@ function CreateSheet({
   const switchKind = (k: 'person' | 'event') => {
     setKind(k)
     setError(null)
-    if (!home) setAreas(['Все місто'])
-    else if (k === 'event') setAreas(venue?.area ? [venue.area] : [])
-    else if (areas.length <= 1 && profile.areas?.length) setAreas(profile.areas)
+    if (k === 'event') setAreas(venue ? [venue.area ?? 'Все місто'] : ['Все місто'])
     applyText(headline, k, k === 'event' ? tags.slice(0, 1) : tags, auto)
   }
 
@@ -1724,8 +1745,7 @@ function CreateSheet({
     if (tags.length === 0) return setError('Обери категорію')
     if (kind === 'person' && to <= from) return setError('Кінець має бути пізніше за початок')
     if (kind === 'event' && !venue) return setError('Обери місце')
-    if (areas.length === 0) return setError(kind === 'event' ? 'Не вдалося визначити район, обери його' : 'Обери район')
-    if (kind === 'event' && !venue) return setError('Обери місце')
+    if (kind === 'person' && !near) return setError('Покажи, звідки тобі зручно')
     const finalBio = bio.trim()
     track('post_create', { kind, autoTags: auto, manualTags: tags.filter((t) => !auto.includes(t)) })
     onPublish({
@@ -1734,8 +1754,10 @@ function CreateSheet({
       headline: headline.trim(),
       bio: finalBio,
       time: kind === 'person' ? `${from} - ${to}` : at,
-      place: formatAreas(areas),
-      areas,
+      place: kind === 'person' && near ? near.label : formatAreas(areas),
+      // Districts only as an old-style hint for pings (Lviv); the point decides now
+      areas: kind === 'person' && near ? [nearestArea(near.lat, near.lon) ?? 'Все місто'] : areas,
+      ...(kind === 'person' && near ? { near, reach } : {}),
       venue: kind === 'event' ? venue?.name : undefined,
       ...(kind === 'event' && venue
         ? {
@@ -1845,22 +1867,32 @@ function CreateSheet({
         </select>
       )}
 
-      {/* A plan has a venue: its district comes from the map. Free time has no place yet: pick districts. */}
-      {home && (kind === 'person' || (venue && !venue.area)) && (
+      {/* Free time has no venue yet: a rough point + how far I'd go */}
+      {kind === 'person' && (
         <>
-          <p className="dlabel">
-            {kind === 'person' ? 'Райони' : 'Район'}{' '}
-            <span className="dopt">{kind === 'person' ? `до ${MAX_AREAS}` : 'не вдалося визначити за місцем'}</span>
-          </p>
-          <AreaPicker
-            value={areas}
-            multi={kind === 'person'}
-            onChange={(next) => {
-              setAreas(next)
+          <p className="dlabel">Звідки ти</p>
+          <NearField
+            value={near}
+            onChange={(n) => {
+              setNear(n)
               setError(null)
             }}
-            onError={setError}
           />
+          {profile.places && profile.places.length > 1 && (
+            <div className="dchips dchips-gap">
+              {profile.places.map((pl) => (
+                <button
+                  key={pl.label + pl.lat}
+                  className={near?.lat === pl.lat && near?.lon === pl.lon ? 'dchip dchip-small on' : 'dchip dchip-small'}
+                  onClick={() => setNear(pl)}
+                >
+                  {pl.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="dlabel">Готовий доїхати</p>
+          <ReachChips value={reach} onChange={setReach} />
         </>
       )}
 
@@ -1871,7 +1903,6 @@ function CreateSheet({
             <b>{venue ? `📍 ${venue.name}` : 'Обрати на карті'}</b>
             <span>{venue ? venue.address || 'Змінити' : 'Кав’ярня, бар, парк: тільки публічні місця'}</span>
           </button>
-          {venue?.area && <p className="dhint dhint-left">Район: {venue.area}, визначили за місцем</p>}
           {picking && (
             <Suspense fallback={null}>
               <PlacePicker
@@ -1881,8 +1912,8 @@ function CreateSheet({
                   setVenue(p)
                   setPicking(false)
                   setError(null)
-                  // A plan happens at one venue: its district comes from the map when we can tell
-                  if (p.area) setAreas([p.area])
+                  // Kept for old-style pings only; not shown
+                  setAreas([p.area ?? 'Все місто'])
                 }}
               />
             </Suspense>

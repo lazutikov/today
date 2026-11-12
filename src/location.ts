@@ -112,3 +112,9 @@ export function useMyLocation() {
 
   return { coords, state, request }
 }
+
+/** Where a card is: the venue for a plan, the rough point for free time */
+export function cardPoint(c: { lat?: number; lon?: number; near?: Coords }): Coords | null {
+  if (c.lat !== undefined && c.lon !== undefined) return { lat: c.lat, lon: c.lon }
+  return c.near ? { lat: c.near.lat, lon: c.near.lon } : null
+}

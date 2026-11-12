@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CITY, CITY_NAME, MAX_AREAS } from './feed'
+import { CITY, CITY_NAME } from './feed'
 import selfie from './site/img/selfie.jpg'
 import type { Profile } from './profile'
 import {
@@ -13,9 +13,8 @@ import {
   type TgUser,
 } from './telegram'
 import { identify, track } from './track'
-import { AreaPicker, GenderAge, Sticker } from './ui'
+import { GenderAge, Sticker } from './ui'
 import { fetchMe, isLive } from './live'
-import { getSpot, isHomeCity } from './area'
 
 function TelegramIcon() {
   return (
@@ -245,15 +244,10 @@ export function Onboarding({
   onDone: (p: Profile) => void
 }) {
   const [bio, setBio] = useState(profile.bio)
-  // Districts exist only for the launch city; elsewhere the person covers the whole city
-  const home = isHomeCity(getSpot())
-  const [areas, setAreas] = useState<string[]>(home ? (profile.areas ?? []) : ['Все місто'])
   const [ga, setGa] = useState<Pick<Profile, 'gender' | 'age'>>({
     gender: profile.gender,
     age: profile.age,
   })
-  const [error, setError] = useState<string | null>(null)
-
   // Age from the Telegram birthday, if they set one with a year and it's visible to the bot.
   useEffect(() => {
     if (profile.age || !isLive()) return
@@ -265,9 +259,9 @@ export function Onboarding({
   }, [])
 
   const submit = () => {
-    if (areas.length === 0) return setError('Обери хоча б один район, щоб бачити людей поруч')
-    track('onboarding_done', { hasBio: Boolean(bio.trim()), areas, gender: ga.gender ?? 'none' })
-    onDone({ bio: bio.trim(), areas, ...ga })
+    track('onboarding_done', { hasBio: Boolean(bio.trim()), gender: ga.gender ?? 'none' })
+    // Places for pings are added later in the profile; the feed works from «Звідки»
+    onDone({ ...profile, bio: bio.trim(), areas: profile.areas ?? [], ...ga })
   }
 
   return (
@@ -299,25 +293,11 @@ export function Onboarding({
           onChange={(e) => setBio(e.target.value)}
         />
 
-        {home && (
-          <>
-            <p className="dlabel">
-              Де тобі зручно зустрічатися? <span className="dopt">до {MAX_AREAS}</span>
-            </p>
-            <AreaPicker value={areas} multi onChange={setAreas} onError={setError} />
-          </>
-        )}
-
         <p className="dlabel">
           Стать і вік <span className="dopt">необов’язково, видно на твоїх постах</span>
         </p>
         <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
 
-        {error && (
-          <p className="derror" role="alert">
-            {error}
-          </p>
-        )}
       </main>
       <div className="landing-cta">
         <button className="dbtn" onClick={submit}>

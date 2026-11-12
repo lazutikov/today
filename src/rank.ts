@@ -4,7 +4,7 @@
  * city, then the rest) → soonest first. Past plans sink to the bottom.
  */
 import { WHOLE_CITY, type FeedCard } from './feed'
-import { distanceKm, type Coords } from './location'
+import { cardPoint, distanceKm, type Coords } from './location'
 
 const toMin = (t: string) => {
   const m = /(\d{1,2}):(\d{2})/.exec(t)
@@ -33,7 +33,8 @@ export function rankFeed(
     const end = to ?? from ?? 24 * 60
     const areas = cardAreas(c)
     // Known position + a real venue: closeness beats district names
-    const km = here && c.lat !== undefined && c.lon !== undefined ? distanceKm(here, { lat: c.lat, lon: c.lon }) : null
+    const pt = cardPoint(c)
+    const km = here && pt ? distanceKm(here, pt) : null
     const areaRank =
       km !== null
         ? km < 2.5

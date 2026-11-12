@@ -10,6 +10,10 @@ export type Profile = {
   age?: number
   /** Bot may message about new plans in my districts (on unless turned off) */
   notify?: boolean
+  /** «Мої місця»: up to 2 rough points (~500 m), for pings and the feed */
+  places?: { lat: number; lon: number; label: string }[]
+  /** Pings for plans within this many km of my places */
+  radius?: number
 }
 
 const KEY = 'today.profile'

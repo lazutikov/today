@@ -16,8 +16,7 @@ import {
   secondsToKyivMidnight,
   signPhoto,
   tg,
-  type SessionUser,
-} from './_kv.js'
+  type SessionUser, cleanNear, cleanReach, type Near } from './_kv.js'
 import { audienceFor } from './_profile.js'
 
 export const ANSWER_SECONDS = 5 * 60
@@ -34,6 +33,9 @@ export type Post = {
   tags: string[]
   /** Districts picked by the author (for "new plan near you") */
   areas?: string[]
+  /** Free-time post: rough point (~500 m) + how far they'd go */
+  near?: Near
+  reach?: number
   /** Exact venue from the map picker */
   venueAddress?: string
   lat?: number
@@ -109,6 +111,7 @@ export function cleanPost(input: Record<string, unknown>, user: SessionUser): Po
       ? input.areas.filter((a): a is string => typeof a === 'string' && a.length <= 40).slice(0, 3)
       : [],
     ...(kind === 'event' ? { venueAddress: str(input.venueAddress, 160) || undefined, ...coords(input) } : {}),
+    ...(kind === 'person' && cleanNear(input.near) ? { near: cleanNear(input.near), reach: cleanReach(input.reach) } : {}),
     age: Number.isFinite(age) && age > 0 && age < 100 ? Math.round(age) : 0,
     gender,
     // Author + 1..6 people they are looking for
@@ -135,6 +138,8 @@ export function publicCard(p: Post, viewerId: number | null) {
     tags: p.tags,
     areas: p.areas ?? [],
     venueAddress: p.venueAddress,
+    near: p.near,
+    reach: p.reach,
     lat: p.lat,
     lon: p.lon,
     name: '',
@@ -688,7 +693,10 @@ export function quietNow(now = kyivMinutes()): boolean {
 /** Tells people in the post's districts about it. Returns how many were messaged. */
 export async function pingNearby(p: Post, site: string): Promise<number> {
   if (quietNow() || !stillAhead(p.time)) return 0
-  const audience = (await audienceFor(p.city, p.areas ?? [])).filter((id) => id !== p.authorId)
+  const point = p.kind === 'event' && p.lat != null && p.lon != null ? { lat: p.lat, lon: p.lon } : p.near
+  const audience = (await audienceFor(p.city, p.areas ?? [], point, p.kind === 'person' ? p.reach : 0)).filter(
+    (id) => id !== p.authorId,
+  )
   const who = [p.gender ?? 'Стать не вказана', p.age ? String(p.age) : ''].filter(Boolean).join(', ')
   const head = p.kind === 'person' ? '🙋 <b>Хтось вільний сьогодні поруч</b>' : '🎯 <b>Новий план поруч</b>'
   const where =
