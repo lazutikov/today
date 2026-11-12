@@ -6,7 +6,8 @@
  *  DELETE /api/sender                       disconnect
  */
 import { json, OWNER_USERNAME, readJson, readSession } from './_kv.js'
-import { loginFinish, loginResend, loginSendCode, logoutSender, senderConfigured, senderReady } from './_sender.js'
+import QRCode from 'qrcode'
+import { loginFinish, loginResend, loginSendCode, logoutSender, qrStep, senderConfigured, senderReady } from './_sender.js'
 
 const isOwner = (request: Request) => readSession(request)?.username?.toLowerCase() === OWNER_USERNAME
 
@@ -18,19 +19,24 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
   if (!senderConfigured) return json({ ok: false, error: 'no_api_id' }, 400)
-  const b = await readJson<{ phone?: string; code?: string; password?: string; resend?: boolean }>(request)
+  const b = await readJson<{ phone?: string; code?: string; password?: string; resend?: boolean; qr?: boolean }>(request)
   try {
     if (b?.phone) {
       const phone = '+' + b.phone.replace(/\D/g, '')
       if (phone.length < 10) return json({ ok: false, error: 'bad_phone' }, 400)
       return json({ ok: true, step: 'code', sent: await loginSendCode(phone) })
     }
+    if (b && 'qr' in b) {
+      const r = await qrStep()
+      if (r.state === 'show') return json({ ok: true, ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, width: 240 }) })
+      return json({ ok: true, ...r, account: r.state === 'ok' ? await senderReady() : null })
+    }
     if (b && 'resend' in b) {
       const sent = await loginResend()
       return sent ? json({ ok: true, step: 'code', sent }) : json({ ok: false, error: 'expired' }, 400)
     }
-    if (b?.code) {
-      const r = await loginFinish(b.code.replace(/\D/g, ''), b.password || undefined)
+    if (b?.code || b?.password) {
+      const r = await loginFinish((b.code ?? '').replace(/\D/g, ''), b.password || undefined)
       return json({ ok: r === 'ok', step: r, account: r === 'ok' ? await senderReady() : null })
     }
   } catch (e) {

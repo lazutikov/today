@@ -178,6 +178,64 @@ export async function loginFinish(code: string, password?: string): Promise<'ok'
   }
 }
 
+/* ---------- QR login: scan in Telegram → Settings → Devices → Link Desktop Device ---------- */
+
+const QR = 'sender:qr'
+
+async function saveMe(c: TelegramClient) {
+  const me = await c.getMe()
+  await kv('SET', SESSION, c.session.save() as unknown as string)
+  await kv('SET', ME, JSON.stringify({ username: me.username, name: [me.firstName, me.lastName].filter(Boolean).join(' ') }))
+  await kv('DEL', QR, PENDING)
+}
+
+/**
+ * Start or continue a QR login. Each call asks Telegram once:
+ * a fresh token to show (not scanned yet), 'ok' when accepted on the phone,
+ * or 'need_password' when the account has 2FA.
+ */
+export async function qrStep(): Promise<{ state: 'show'; url: string; expires: number } | { state: 'ok' } | { state: 'need_password' }> {
+  const saved = (await kv('GET', QR)) as string | null
+  const c = client(saved ?? '')
+  await c.connect()
+  try {
+    let r: Api.auth.TypeLoginToken
+    try {
+      r = await c.invoke(new Api.auth.ExportLoginToken({ apiId: API_ID, apiHash: API_HASH, exceptIds: [] }))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ''
+      if (msg.includes('SESSION_PASSWORD_NEEDED')) {
+        await kv('SET', PENDING, JSON.stringify({ phone: '', hash: '', session: c.session.save(), needPassword: true }), 'EX', 600)
+        return { state: 'need_password' }
+      }
+      throw e
+    }
+    if (r instanceof Api.auth.LoginTokenMigrateTo) {
+      await c._switchDC(r.dcId)
+      try {
+        r = await c.invoke(new Api.auth.ImportLoginToken({ token: r.token }))
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : ''
+        if (msg.includes('SESSION_PASSWORD_NEEDED')) {
+          await kv('SET', PENDING, JSON.stringify({ phone: '', hash: '', session: c.session.save(), needPassword: true }), 'EX', 600)
+          return { state: 'need_password' }
+        }
+        throw e
+      }
+    }
+    if (r instanceof Api.auth.LoginTokenSuccess) {
+      await saveMe(c)
+      return { state: 'ok' }
+    }
+    const t = r as Api.auth.LoginToken
+    await kv('SET', QR, c.session.save() as unknown as string, 'EX', 600)
+    return { state: 'show', url: `tg://login?token=${Buffer.from(t.token).toString('base64url')}`, expires: t.expires * 1000 }
+  } finally {
+    await c.disconnect().catch(() => {})
+    await c.destroy().catch(() => {})
+  }
+}
+
 export async function logoutSender() {
-  await kv('DEL', SESSION, ME, PENDING)
+  await kv('DEL', SESSION, ME, PENDING, QR)
 }

@@ -35,6 +35,18 @@
 
     <div id="status"><p class="muted">Перевіряємо…</p></div>
 
+    <div id="qrBox" hidden>
+      <p><b>Скануй QR у Telegram на телефоні:</b> Налаштування → Пристрої → «Під’єднати пристрій» (Link Desktop Device).</p>
+      <div id="qr" style="display:grid;place-items:center;padding:12px;background:#fff;border-radius:16px;min-height:264px"></div>
+      <p class="muted" id="qrNote">QR оновлюється сам. Після сканування сторінка підключиться за кілька секунд.</p>
+      <div id="qrPwdBox" hidden>
+        <label for="qrPwd">Пароль двоетапної перевірки</label>
+        <input id="qrPwd" type="password" autocomplete="off" />
+        <button type="button" id="qrPwdBtn">Підключити</button>
+      </div>
+    </div>
+    <button type="button" id="qrStart">Увійти через QR-код (без коду в чаті)</button>
+
     <form id="phoneForm" hidden>
       <label for="phone">Номер телефону акаунта</label>
       <input id="phone" type="tel" placeholder="+380…" autocomplete="off" required />
@@ -76,14 +88,14 @@
 
   async function load() {
     const r = await call('GET')
-    if (!r.ok) { $('status').innerHTML = ''; return err(ERR[r.error] || 'Помилка: ' + r.error) }
-    if (!r.configured) { $('status').innerHTML = ''; return err(ERR.no_api_id) }
+    if (!r.ok) { $('status').innerHTML = ''; $('qrStart').hidden = true; return err(ERR[r.error] || 'Помилка: ' + r.error) }
+    if (!r.configured) { $('status').innerHTML = ''; $('qrStart').hidden = true; return err(ERR.no_api_id) }
     if (r.account) {
       $('status').innerHTML = `<p class="ok">Підключено${r.account.username ? ': @' + r.account.username : ''}${r.account.name ? ' (' + r.account.name + ')' : ''}</p>
         <ol><li>Перевір, що в акаунта є ім’я «today · безпека» і фото.</li><li>Додай когось у «Довірені люди» на сайті — їм прийде запрошення.</li></ol>
         <button class="ghost" id="logout">Відключити</button>`
       $('logout').onclick = async () => { await call('DELETE'); location.reload() }
-      $('phoneForm').hidden = true; $('codeForm').hidden = true
+      $('phoneForm').hidden = true; $('codeForm').hidden = true; $('qrStart').hidden = true
       return
     }
     $('status').innerHTML = ''
@@ -143,6 +155,27 @@
     if (r.ok) return load()
     if (r.step === 'need_password') { $('pwdBox').hidden = false; $('pwd').focus(); return err('На акаунті є двоетапна перевірка: введи пароль.') }
     if (r.step === 'expired') { $('codeForm').hidden = true; $('phoneForm').hidden = false }
+    err(ERR[r.step] || ERR[r.error] || 'Помилка: ' + (r.step || r.error))
+  }
+
+  let qrTimer = 0, lastUrl = ''
+  async function qrPoll() {
+    const r = await call('POST', { qr: true })
+    if (!r.ok) { clearInterval(qrTimer); return err(/FLOOD/.test(r.error || '') ? 'Telegram просить зачекати. Спробуй за кілька хвилин.' : 'Помилка: ' + r.error) }
+    if (r.state === 'show' && r.url !== lastUrl) { lastUrl = r.url; $('qr').innerHTML = r.svg }
+    if (r.state === 'need_password') { clearInterval(qrTimer); $('qr').innerHTML = '<p>✓ Відскановано</p>'; $('qrPwdBox').hidden = false; $('qrPwd').focus() }
+    if (r.state === 'ok') { clearInterval(qrTimer); $('qrBox').hidden = true; load() }
+  }
+  $('qrStart').onclick = () => {
+    err(''); $('qrStart').hidden = true; $('phoneForm').hidden = true; $('codeForm').hidden = true; $('qrBox').hidden = false
+    $('qr').innerHTML = '<p class="muted">Готуємо QR…</p>'
+    qrPoll(); qrTimer = setInterval(qrPoll, 3000)
+  }
+  $('qrPwdBtn').onclick = async (e) => {
+    err(''); e.target.disabled = true
+    const r = await call('POST', { password: $('qrPwd').value })
+    e.target.disabled = false
+    if (r.ok) { $('qrBox').hidden = true; return load() }
     err(ERR[r.step] || ERR[r.error] || 'Помилка: ' + (r.step || r.error))
   }
 

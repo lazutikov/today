@@ -12,9 +12,11 @@
   "dependencies": {
     "@fontsource/manrope": "^5.3.0",
     "@fontsource/unbounded": "^5.3.0",
+    "@types/qrcode": "^1.5.6",
     "big-integer": "^1.6.52",
     "leaflet": "^1.9.4",
     "posthog-js": "^1.447.12",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "telegram": "^2.26.22"
