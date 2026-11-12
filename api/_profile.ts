@@ -15,6 +15,9 @@ export type ServerProfile = {
   /** «Мої місця»: up to 2 rough points, and how far from them pings reach */
   places?: Near[]
   radius?: number
+  interests?: string[]
+  when?: ('weekday' | 'weekend')[]
+  company?: 'one' | 'group' | 'any'
   city: string
   updatedAt: number
 }
@@ -40,6 +43,11 @@ export function cleanProfile(input: Record<string, unknown>): ServerProfile {
       ? input.places.map(cleanNear).filter((x): x is Near => Boolean(x)).slice(0, 2)
       : [],
     radius: [2, 5, 10].includes(Number(input.radius)) ? Number(input.radius) : 5,
+    interests: Array.isArray(input.interests)
+      ? input.interests.filter((t): t is string => typeof t === 'string' && t.length <= 20).slice(0, 7)
+      : [],
+    when: Array.isArray(input.when) ? input.when.filter((w): w is 'weekday' | 'weekend' => w === 'weekday' || w === 'weekend') : [],
+    company: input.company === 'one' || input.company === 'group' ? input.company : 'any',
     city: cleanCity(input.city),
     updatedAt: Date.now(),
   }

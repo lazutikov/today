@@ -2849,3 +2849,131 @@ html:has(.screen) body {
 .safety-state b { font-size: 17px; color: #141414; }
 .safety-state.on { background: #e3f5ea; }
 .safety-state.on b { color: #1f6b3f; }
+
+/* ---------- Onboarding: the site's look, phone first ---------- */
+.ob {
+  min-height: 100dvh;
+  background: #000;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+}
+.ob-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 72px 1fr 92px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #000;
+}
+.ob-logo { font-family: 'Unbounded', var(--display, sans-serif); font-weight: 700; font-size: 18px; }
+.ob-back { width: 40px; height: 40px; border: 0; border-radius: 50%; background: #1c1c1c; color: #fff; font-size: 26px; line-height: 1; }
+.ob-progress { display: flex; gap: 6px; }
+.ob-progress span { flex: 1; height: 4px; border-radius: 4px; background: #2a2a2a; }
+.ob-progress span.on { background: #fc601e; }
+.ob-skip { justify-self: end; border: 0; background: none; color: #a7a7a7; font: inherit; font-size: 15px; padding: 8px 0; }
+.ob-skip-space { width: 1px; }
+.ob-main { flex: 1; padding: 12px 20px 24px; max-width: 520px; width: 100%; margin: 0 auto; }
+.ob-main .astk { margin-top: 20px; }
+.ob-lead { margin: 18px 0 8px; font-size: 16px; line-height: 1.5; color: #a7a7a7; }
+.ob-label { margin: 26px 0 10px; font-size: 15px; font-weight: 700; color: #fff; }
+.ob-label span { font-weight: 400; color: #7a7a7a; margin-left: 6px; }
+.ob-input {
+  width: 100%;
+  border: 0;
+  border-radius: 20px;
+  padding: 16px 18px;
+  background: #1c1c1c;
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+  resize: none;
+}
+.ob-input::placeholder { color: #6b6b6b; }
+.ob-input:focus-visible { outline: 2px solid #fc601e; outline-offset: 2px; }
+.ob-ga .dchip { background: #1c1c1c; border-color: #1c1c1c; color: #fff; }
+.ob-ga .dchip.on { background: #fc601e; border-color: #fc601e; color: #000; }
+.ob-ga .dinput { background: #1c1c1c; color: #fff; border: 0; }
+.ob-preview {
+  margin-top: 28px;
+  display: grid;
+  gap: 4px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: #fff;
+  color: #000;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.ob-preview-kicker { font-size: 13px; color: #8a8a8a; }
+.ob-preview b { font-size: 17px; }
+.ob-preview > span:last-child { color: #575757; }
+.ob-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ob-chip {
+  border: 0;
+  border-radius: 99px;
+  padding: 12px 18px;
+  background: #1c1c1c;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+}
+.ob-chip.on { background: #fc601e; color: #000; }
+.ob-safety { margin-top: 8px; }
+.ob-safety .dlabel { color: #fff; }
+.ob-safety .dhint { color: #a7a7a7; }
+.ob-safety .my-place { background: #1c1c1c; color: #fff; }
+.ob-safety .dinput { background: #1c1c1c; color: #fff; }
+.ob-safety .dinput::placeholder { color: #6b6b6b; }
+.ob-safety .dlink { color: #a7a7a7; }
+.ob-toggle {
+  margin-top: 20px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 0;
+  border-radius: 22px;
+  background: #1c1c1c;
+  color: #fff;
+  text-align: left;
+  font: inherit;
+}
+.ob-toggle > span:first-child { display: grid; gap: 4px; font-size: 14px; color: #a7a7a7; }
+.ob-toggle b { font-size: 16px; color: #fff; }
+.ob-toggle:disabled { opacity: 0.5; }
+.ob-knob { flex: none; position: relative; width: 50px; height: 30px; border-radius: 99px; background: #3a3a3a; }
+.ob-knob::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+.ob-toggle.on .ob-knob { background: #3ddc84; }
+.ob-toggle.on .ob-knob::after { left: 23px; }
+.ob-cta {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000 30%);
+}
+.ob-btn {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 99px;
+  padding: 18px;
+  background: #fc601e;
+  color: #000;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) { .ob-knob::after { transition: none; } }
+.ob-safety .dchip.on { background: #fc601e; border-color: #fc601e; color: #000; }
+.ob-safety > .dhint { display: none; }
+.ob-safety .dlabel { margin-top: 24px; }

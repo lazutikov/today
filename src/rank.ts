@@ -24,6 +24,7 @@ export function rankFeed(
   myAreas: string[] = [],
   now = new Date(),
   here?: Coords | null,
+  interests: string[] = [],
 ): FeedCard[] {
   const nowMin = now.getHours() * 60 + now.getMinutes()
   const everywhere = myAreas.length === 0 || myAreas.includes(WHOLE_CITY)
@@ -47,7 +48,8 @@ export function rankFeed(
           : areas.includes(WHOLE_CITY)
             ? 1
             : 2
-    return [c.mine ? 0 : 1, c.real ? 0 : 1, end <= nowMin ? 1 : 0, areaRank, from ?? 24 * 60]
+    const liked = interests.length && c.tags.some((t) => interests.includes(t)) ? 0 : 1
+    return [c.mine ? 0 : 1, c.real ? 0 : 1, end <= nowMin ? 1 : 0, areaRank, liked, from ?? 24 * 60]
   }
 
   return cards

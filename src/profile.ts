@@ -14,6 +14,10 @@ export type Profile = {
   places?: { lat: number; lon: number; label: string; exact?: boolean }[]
   /** Pings for plans within this many km of my places */
   radius?: number
+  /** Onboarding step 2: what I'm into, when I'm free, alone or a group */
+  interests?: string[]
+  when?: ('weekday' | 'weekend')[]
+  company?: 'one' | 'group' | 'any'
 }
 
 const KEY = 'today.profile'

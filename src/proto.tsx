@@ -168,7 +168,7 @@ export default function Proto() {
     fetchMe()
       .then(({ profile }) => {
         if (profile && (profile.areas?.length || profile.places?.length || profile.updatedAt)) {
-          saveProfile({ bio: profile.bio, areas: profile.areas, gender: profile.gender, age: profile.age, notify: profile.notify, places: profile.places, radius: profile.radius })
+          saveProfile({ bio: profile.bio, areas: profile.areas, gender: profile.gender, age: profile.age, notify: profile.notify, places: profile.places, radius: profile.radius, interests: profile.interests, when: profile.when, company: profile.company })
           setSignedIn(true)
           track('profile_restored')
           setStage('app')
@@ -190,6 +190,7 @@ export default function Proto() {
     return (
       <Onboarding
         profile={withGuessedGender(loadProfile())}
+        genderKnown={Boolean(loadProfile().gender)}
         onDone={(p) => {
           saveProfile(p)
           saveProfileRemote(p, getSpotKey())
@@ -414,7 +415,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         saveProfileRemote(loadProfile(), getSpotKey()) // first time on the server: upload what this device has
         return
       }
-      const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify, places: remote.places, radius: remote.radius }
+      const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify, places: remote.places, radius: remote.radius, interests: remote.interests, when: remote.when, company: remote.company }
       setProfile(next)
       saveProfile(next)
     })
@@ -751,6 +752,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     home ? (profile.areas ?? []) : [],
     new Date(),
     from,
+    profile.interests ?? [],
   )
   const radiusOn = filters.radius !== null && Boolean(from)
   const shown = filterByQuery(cards, query).filter((c) => {

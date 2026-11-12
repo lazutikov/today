@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CITY, CITY_NAME } from './feed'
+import { CITY, CITY_NAME, TAGS } from './feed'
 import selfie from './site/img/selfie.jpg'
 import type { Profile } from './profile'
 import {
@@ -15,6 +15,7 @@ import {
 import { identify, track } from './track'
 import { GenderAge, Sticker } from './ui'
 import { fetchMe, isLive } from './live'
+import { savePrefs, syncSafety, TrustedSection, useSafetyStore } from './safety'
 
 function TelegramIcon() {
   return (
@@ -245,20 +246,45 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
   )
 }
 
+const WHEN: { key: 'weekday' | 'weekend'; label: string }[] = [
+  { key: 'weekday', label: 'Будні ввечері' },
+  { key: 'weekend', label: 'Вихідні' },
+]
+const COMPANY: { key: 'one' | 'group' | 'any'; label: string }[] = [
+  { key: 'one', label: 'Удвох' },
+  { key: 'group', label: 'Компанією' },
+  { key: 'any', label: 'Без різниці' },
+]
+
+/**
+ * Three short steps in the site's look:
+ * 1 about me (+ gender/age only when Telegram didn't tell us),
+ * 2 what I'm into (the feed and pings use it),
+ * 3 Safety mode (skippable).
+ */
 export function Onboarding({
   profile,
+  genderKnown,
   onDone,
 }: {
   profile: Profile
+  /** Gender came from the person, not our guess by name */
+  genderKnown?: boolean
   onDone: (p: Profile) => void
 }) {
+  const { enabled: safetyOn, trusted, prefs } = useSafetyStore()
+  const steps = safetyOn ? 3 : 2
+  const [step, setStep] = useState(1)
   const [bio, setBio] = useState(profile.bio)
-  const [ga, setGa] = useState<Pick<Profile, 'gender' | 'age'>>({
-    gender: profile.gender,
-    age: profile.age,
-  })
+  const [ga, setGa] = useState<Pick<Profile, 'gender' | 'age'>>({ gender: profile.gender, age: profile.age })
+  const [askGa] = useState(() => !genderKnown || !profile.age)
+  const [interests, setInterests] = useState<string[]>(profile.interests ?? [])
+  const [when, setWhen] = useState<('weekday' | 'weekend')[]>(profile.when ?? [])
+  const [company, setCompany] = useState<'one' | 'group' | 'any'>(profile.company ?? 'any')
+
   // Age from the Telegram birthday, if they set one with a year and it's visible to the bot.
   useEffect(() => {
+    syncSafety()
     if (profile.age || !isLive()) return
     fetchMe().then(({ age }) => {
       if (age) setGa((cur) => (cur.age ? cur : { ...cur, age }))
@@ -267,50 +293,180 @@ export function Onboarding({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const submit = () => {
-    track('onboarding_done', { hasBio: Boolean(bio.trim()), gender: ga.gender ?? 'none' })
-    // Places for pings are added later in the profile; the feed works from «Звідки»
-    onDone({ ...profile, bio: bio.trim(), areas: profile.areas ?? [], ...ga })
+  useEffect(() => {
+    track('onboarding_step', { step })
+    window.scrollTo(0, 0)
+  }, [step])
+
+  const finish = () => {
+    track('onboarding_done', {
+      hasBio: Boolean(bio.trim()),
+      gender: ga.gender ?? 'none',
+      interests: interests.length,
+      safety: prefs.on,
+      trusted: trusted.length,
+    })
+    onDone({ ...profile, bio: bio.trim(), areas: profile.areas ?? [], ...ga, interests, when, company })
   }
+  const next = () => (step < steps ? setStep(step + 1) : finish())
+  const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
+
+  const who = [ga.gender, ga.age ? String(ga.age) : ''].filter(Boolean).join(', ')
 
   return (
-    <div className="screen landing">
-      <header className="screen-head">
-        <div className="wordmark">today</div>
+    <div className="ob">
+      <header className="ob-head">
+        {step > 1 ? (
+          <button className="ob-back" onClick={() => setStep(step - 1)} aria-label="Назад">
+            ‹
+          </button>
+        ) : (
+          <span className="ob-logo">today</span>
+        )}
+        <div className="ob-progress" aria-label={`Крок ${step} з ${steps}`}>
+          {Array.from({ length: steps }, (_, i) => (
+            <span key={i} className={i < step ? 'on' : ''} />
+          ))}
+        </div>
+        {step > 1 ? (
+          <button className="ob-skip" onClick={next}>
+            Пропустити
+          </button>
+        ) : (
+          <span className="ob-skip-space" />
+        )}
       </header>
-      <main className="landing-main">
-        <Sticker
-          as="h1"
-          lines={[
-            { text: 'пару слів', tag: 'Прогулянка' },
-            { text: 'про тебе', tag: 'Спорт' },
-          ]}
-        />
-        <p className="landing-lead">
-          Це бачитимуть на твоїх постах. Ім’я та фото з Telegram — тільки після матчу.
-        </p>
 
-        <label className="dlabel" htmlFor="o-bio">
-          Про себе <span className="dopt">необов’язково</span>
-        </label>
-        <input
-          id="o-bio"
-          className="dinput dinput-white"
-          maxLength={80}
-          placeholder="Одним рядком: чим займаєшся, що любиш"
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-        />
+      <main className="ob-main">
+        {step === 1 && (
+          <>
+            <Sticker
+              as="h1"
+              lines={[
+                { text: 'пару слів', tag: 'Прогулянка' },
+                { text: 'про тебе', tag: 'Спорт' },
+              ]}
+            />
+            <p className="ob-lead">Це побачать на твоїх постах. Ім’я та фото з Telegram — тільки після матчу.</p>
+            <label className="ob-label" htmlFor="o-bio">
+              Про себе
+            </label>
+            <textarea
+              id="o-bio"
+              className="ob-input"
+              rows={3}
+              maxLength={80}
+              placeholder="Чим займаєшся, що любиш"
+              value={bio}
+              onChange={(e) => setBio(e.target.value.replace(/\s*\n\s*/g, ' '))}
+            />
+            {askGa && (
+              <>
+                <p className="ob-label">
+                  Стать і вік <span>необов’язково</span>
+                </p>
+                <div className="ob-ga">
+                  <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
+                </div>
+              </>
+            )}
+            <div className="ob-preview" aria-label="Так тебе бачитимуть">
+              <span className="ob-preview-kicker">Так тебе бачитимуть</span>
+              <b>{who || 'Без статі й віку'}</b>
+              <span>{bio.trim() || 'Тут буде твій рядок «про себе»'}</span>
+            </div>
+          </>
+        )}
 
-        <p className="dlabel">
-          Стать і вік <span className="dopt">необов’язково, видно на твоїх постах</span>
-        </p>
-        <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
+        {step === 2 && (
+          <>
+            <Sticker
+              as="h1"
+              lines={[
+                { text: 'що', tag: 'Кава' },
+                { text: 'шукаєш', tag: 'Кіно' },
+              ]}
+            />
+            <p className="ob-lead">Покажемо такі плани першими й напишемо, коли щось схоже з’явиться поруч.</p>
+            <p className="ob-label">Як любиш проводити час</p>
+            <div className="ob-chips">
+              {TAGS.map((t) => (
+                <button
+                  key={t}
+                  className={interests.includes(t) ? 'ob-chip on' : 'ob-chip'}
+                  aria-pressed={interests.includes(t)}
+                  onClick={() => setInterests(toggle(interests, t))}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <p className="ob-label">Коли зазвичай вільний(а)</p>
+            <div className="ob-chips">
+              {WHEN.map((w) => (
+                <button
+                  key={w.key}
+                  className={when.includes(w.key) ? 'ob-chip on' : 'ob-chip'}
+                  aria-pressed={when.includes(w.key)}
+                  onClick={() => setWhen(toggle(when, w.key))}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+            <p className="ob-label">З ким комфортніше</p>
+            <div className="ob-chips" role="radiogroup">
+              {COMPANY.map((c) => (
+                <button
+                  key={c.key}
+                  role="radio"
+                  aria-checked={company === c.key}
+                  className={company === c.key ? 'ob-chip on' : 'ob-chip'}
+                  onClick={() => setCompany(c.key)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
+        {step === 3 && (
+          <>
+            <Sticker
+              as="h1"
+              lines={[
+                { text: 'спокійно', tag: 'Прогулянка' },
+                { text: 'на зустрічі', tag: 'Кава' },
+              ]}
+            />
+            <p className="ob-lead">
+              Safety mode: за 10 хвилин до зустрічі довірені люди дізнаються, де й з ким ти. Бот спитає «Все добре?», а
+              якщо не відповіси — напише їм.
+            </p>
+            <div className="ob-safety">
+              <TrustedSection />
+            </div>
+            <button
+              className={prefs.on ? 'ob-toggle on' : 'ob-toggle'}
+              role="switch"
+              aria-checked={prefs.on}
+              disabled={!trusted.length && !prefs.on}
+              onClick={() => savePrefs({ ...prefs, on: !prefs.on })}
+            >
+              <span>
+                <b>Увімкнути для всіх зустрічей</b>
+                <span>{trusted.length ? 'Можна змінити будь-коли: щит угорі стрічки' : 'Спершу додай людину вище'}</span>
+              </span>
+              <span className="ob-knob" aria-hidden="true" />
+            </button>
+          </>
+        )}
       </main>
-      <div className="landing-cta">
-        <button className="dbtn" onClick={submit}>
-          Готово
+
+      <div className="ob-cta">
+        <button className="ob-btn" onClick={next}>
+          {step < steps ? 'Далі' : 'Готово'}
         </button>
       </div>
     </div>
