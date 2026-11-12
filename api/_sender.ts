@@ -96,6 +96,13 @@ export async function repliesSince(c: TelegramClient, p: Peer, since: number): P
 
 /* ---------- One-time login by the owner ---------- */
 
+/** Where Telegram sent the code: app chat, SMS, email, call… */
+function codeWhere(r: unknown): { type: string; next?: string; email?: string } {
+  const o = r as { className?: string; type?: { className?: string; emailPattern?: string }; nextType?: { className?: string } }
+  const short = (s?: string) => (s ?? '').replace(/^auth\.(SentCodeType|CodeType)/, '')
+  return { type: o.type ? short(o.type.className) : short(o.className), next: short(o.nextType?.className) || undefined, email: o.type?.emailPattern }
+}
+
 export async function loginSendCode(phone: string) {
   const c = client()
   await c.connect()
@@ -105,6 +112,25 @@ export async function loginSendCode(phone: string) {
     )
     const hash = 'phoneCodeHash' in r ? r.phoneCodeHash : ''
     await kv('SET', PENDING, JSON.stringify({ phone, hash, session: c.session.save() }), 'EX', 600)
+    return codeWhere(r)
+  } finally {
+    await c.disconnect().catch(() => {})
+    await c.destroy().catch(() => {})
+  }
+}
+
+/** Ask Telegram to send the code again (often by SMS the second time) */
+export async function loginResend() {
+  const raw = (await kv('GET', PENDING)) as string | null
+  if (!raw) return null
+  const pending = JSON.parse(raw) as { phone: string; hash: string; session: string }
+  const c = client(pending.session)
+  await c.connect()
+  try {
+    const r = await c.invoke(new Api.auth.ResendCode({ phoneNumber: pending.phone, phoneCodeHash: pending.hash }))
+    const hash = 'phoneCodeHash' in r ? r.phoneCodeHash : pending.hash
+    await kv('SET', PENDING, JSON.stringify({ ...pending, hash, session: c.session.save() }), 'EX', 600)
+    return codeWhere(r)
   } finally {
     await c.disconnect().catch(() => {})
     await c.destroy().catch(() => {})

@@ -6,7 +6,7 @@
  *  DELETE /api/sender                       disconnect
  */
 import { json, OWNER_USERNAME, readJson, readSession } from './_kv.js'
-import { loginFinish, loginSendCode, logoutSender, senderConfigured, senderReady } from './_sender.js'
+import { loginFinish, loginResend, loginSendCode, logoutSender, senderConfigured, senderReady } from './_sender.js'
 
 const isOwner = (request: Request) => readSession(request)?.username?.toLowerCase() === OWNER_USERNAME
 
@@ -18,13 +18,16 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
   if (!senderConfigured) return json({ ok: false, error: 'no_api_id' }, 400)
-  const b = await readJson<{ phone?: string; code?: string; password?: string }>(request)
+  const b = await readJson<{ phone?: string; code?: string; password?: string; resend?: boolean }>(request)
   try {
     if (b?.phone) {
       const phone = '+' + b.phone.replace(/\D/g, '')
       if (phone.length < 10) return json({ ok: false, error: 'bad_phone' }, 400)
-      await loginSendCode(phone)
-      return json({ ok: true, step: 'code' })
+      return json({ ok: true, step: 'code', sent: await loginSendCode(phone) })
+    }
+    if (b && 'resend' in b) {
+      const sent = await loginResend()
+      return sent ? json({ ok: true, step: 'code', sent }) : json({ ok: false, error: 'expired' }, 400)
     }
     if (b?.code) {
       const r = await loginFinish(b.code.replace(/\D/g, ''), b.password || undefined)

@@ -42,7 +42,7 @@
     </form>
 
     <form id="codeForm" hidden>
-      <p>Telegram надіслав код у чат «Telegram» на цьому акаунті.</p>
+      <p id="where">Telegram надіслав код у чат «Telegram» на цьому акаунті.</p>
       <label for="code">Код</label>
       <input id="code" inputmode="numeric" autocomplete="one-time-code" required />
       <div id="pwdBox" hidden>
@@ -50,6 +50,7 @@
         <input id="pwd" type="password" autocomplete="off" />
       </div>
       <button type="submit">Підключити</button>
+      <button type="button" class="ghost" id="resend">Код не прийшов — надіслати ще раз</button>
     </form>
 
     <p id="err" class="err" hidden></p>
@@ -99,7 +100,39 @@
       if (/FLOOD/.test(r.error || '')) return err('Telegram просить зачекати перед новою спробою. Спробуй за кілька хвилин.')
       return err(ERR[r.error] || 'Помилка: ' + r.error)
     }
+    showWhere(r.sent)
     $('phoneForm').hidden = true; $('codeForm').hidden = false; $('code').focus()
+  }
+
+  function showWhere(sent) {
+    const t = (sent && sent.type) || ''
+    const text = {
+      App: 'Код надіслано в чат «Telegram» (з синьою галочкою) на твоїх пристроях, де вже відкритий Telegram. Пошукай чат «Telegram» — у нього часто вимкнені сповіщення.',
+      Sms: 'Код надіслано SMS на цей номер.',
+      SmsWord: 'Telegram надіслав SMS зі словом-кодом.',
+      SmsPhrase: 'Telegram надіслав SMS з фразою-кодом.',
+      FragmentSms: 'Код надіслано через Fragment.',
+      FirebaseSms: 'Код надіслано SMS на цей номер.',
+      Call: 'Telegram подзвонить і продиктує код.',
+      FlashCall: 'Telegram зробить короткий дзвінок: код — останні цифри номера, з якого дзвонять.',
+      MissedCall: 'Telegram зробить короткий дзвінок: код — останні цифри номера, з якого дзвонять.',
+      EmailCode: 'Код надіслано на пошту' + (sent && sent.email ? ' ' + sent.email : '') + '. Перевір і «Спам».',
+      SetUpEmailRequired: 'Telegram вимагає спершу прив’язати пошту до акаунта (у застосунку Telegram: Налаштування → Конфіденційність). Після цього спробуй ще раз.',
+    }[t]
+    $('where').textContent = text || ('Telegram надіслав код (' + (t || 'невідомо куди') + ').')
+    if (sent && sent.next) $('resend').textContent = 'Код не прийшов — надіслати іншим способом'
+  }
+
+  $('resend').onclick = async (e) => {
+    err(''); e.target.disabled = true
+    const r = await call('POST', { resend: true })
+    e.target.disabled = false
+    if (!r.ok) {
+      if (r.error === 'expired') { $('codeForm').hidden = true; $('phoneForm').hidden = false; return err('Спроба застаріла. Введи номер ще раз.') }
+      if (/FLOOD/.test(r.error || '')) return err('Telegram просить зачекати перед новою спробою. Спробуй за кілька хвилин.')
+      return err('Помилка: ' + r.error)
+    }
+    showWhere(r.sent)
   }
 
   $('codeForm').onsubmit = async (e) => {
