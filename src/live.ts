@@ -184,6 +184,8 @@ export type ServerSafety = {
   lastAt: number | null
   asked: string | null
   alarm: string | null
+  armAt: number | null
+  announced: boolean
 }
 export async function fetchSafety(): Promise<{ ready: boolean; safety: ServerSafety | null }> {
   const r = await api<{ ok: boolean; ready?: boolean; safety?: ServerSafety | null }>('/api/safety')

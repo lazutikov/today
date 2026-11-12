@@ -59,6 +59,9 @@ export type SafetyState = {
   asked?: { kind: 'check' | 'fence' | 'lost'; at: number; deadline: number; msgId?: number }
   alarm?: { kind: 'check' | 'fence' | 'lost'; at: number }
   startedAt: number
+  /** Switches itself on 10 minutes before the meeting: trusted people hear about it then */
+  armAt?: number
+  announced?: boolean
 }
 
 const SITE = process.env.SITE_URL || 'https://today-pvfu.vercel.app'
@@ -290,6 +293,24 @@ async function toGuardians(s: SafetyState, html: string) {
   return sent
 }
 
+const ARM_BEFORE = 10 * MIN
+
+/** 10 minutes before the meeting: tell the trusted people, ask for the live location */
+async function announce(s: SafetyState) {
+  s.announced = true
+  await saveSafety(s)
+  const withWho = s.withName ? `\nЗ ким: ${esc(s.withName)}${s.withAge ? `, ${s.withAge}` : ''}.` : ''
+  await toGuardians(
+    s,
+    `🛡 <b>${esc(s.name)} скоро на зустрічі</b>: сьогодні о ${s.time}, ${esc(s.place)}${s.address ? `, ${esc(s.address)}` : ''}.${withWho}\n\nДе ${verb(s.gender, 'він', 'вона', 'людина')} зараз: ${safetyLink(s)}\nПідстраховка до ${hhmm(s.until)}. Нічого робити не треба — напишемо, якщо ${esc(s.name)} не відповідатиме.`,
+  )
+  if (!s.live)
+    await tg('sendMessage', {
+      chat_id: s.uid,
+      text: `🛡 Safety mode увімкнено: зустріч о ${s.time}. Довірені люди вже знають.\n\nПоділись геопозицією наживо: 📎 (скріпка) → Геопозиція → «Транслювати геопозицію» → 8 годин.`,
+    })
+}
+
 export async function startSafety(
   user: { id: number; first_name: string },
   gender: SafetyState['gender'],
@@ -326,14 +347,11 @@ export async function startSafety(
     answerMin: [5, 10, 15].includes(Number(b.answerMin)) ? Number(b.answerMin) : undefined,
     live: false,
     startedAt: Date.now(),
+    armAt: kyivTime(time) - ARM_BEFORE,
   }
   await saveSafety(s)
   await kv('SADD', 'safety:active', user.id)
-  const withWho = s.withName ? `\nЗ ким: ${esc(s.withName)}${s.withAge ? `, ${s.withAge}` : ''}.` : ''
-  await toGuardians(
-    s,
-    `🛡 <b>${esc(s.name)} на зустрічі</b> сьогодні о ${s.time}: ${esc(s.place)}${s.address ? `, ${esc(s.address)}` : ''}.${withWho}\n\nДе ${verb(s.gender, 'він', 'вона', 'людина')} зараз: ${safetyLink(s)}\nПідстраховка до ${hhmm(s.until)}. Нічого робити не треба — напишемо, якщо ${esc(s.name)} не відповідатиме.`,
-  )
+  if (Date.now() >= (s.armAt ?? 0)) await announce(s)
   await phCapture('safety_started', String(user.id), { guardians: guardians.length, fence: s.fence })
   return { ok: true, safety: s }
 }
@@ -425,6 +443,10 @@ export async function tick(s: SafetyState) {
   const now = Date.now()
   if (now > s.until) return stopSafety(s.uid, 'expired')
   if (s.alarm) return
+  if (!s.announced) {
+    if (s.armAt && now < s.armAt) return
+    await announce(s)
+  }
   let dirty = false
   if (s.asked && now >= s.asked.deadline) return raise(s, s.asked.kind)
   if (!s.asked) {

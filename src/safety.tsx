@@ -46,6 +46,17 @@ export type Safety = {
   fence: boolean
   live: boolean
   alarm?: string | null
+  /** "18:50": switches on 10 minutes before the meeting */
+  armAt?: string
+  announced?: boolean
+}
+
+/** Has the safety net reached its start (10 min before the meeting)? */
+export function isArmed(s: Safety, now = new Date()) {
+  if (s.announced) return true
+  if (!s.armAt) return true
+  const [h, m] = s.armAt.split(':').map(Number)
+  return now.getHours() * 60 + now.getMinutes() >= h * 60 + m
 }
 
 const TRUSTED_KEY = 'today.trusted'
@@ -97,6 +108,7 @@ export const fenceText = (km: number) => (km === 0 ? 'без зони' : km < 1 
 export function prefsSummary(p = loadPrefs(), list = loadTrusted()) {
   const who = list.filter((t) => t.status === 'ok').map((t) => t.label || t.name)
   return [
+    'вмикається за 10 хв до зустрічі',
     who.length ? who.join(', ') : 'немає довірених людей',
     `«Все добре?» через ${hoursText(p.checkAfter)}`,
     p.fenceKm ? `зона ${fenceText(p.fenceKm)}` : 'без зони',
@@ -130,6 +142,8 @@ export async function syncSafety() {
         fence: s.safety.fence,
         live: s.safety.live,
         alarm: s.safety.alarm,
+        armAt: s.safety.armAt ? hm(s.safety.armAt) : undefined,
+        announced: s.safety.announced,
       } satisfies Safety)
     }
   }
@@ -232,6 +246,7 @@ export async function startForMatch(matchId: string, m: MeetingInfo): Promise<st
     until: plus(m.time, 180),
     fence: p.fenceKm > 0,
     live: false,
+    armAt: plus(m.time, -10),
   }
   return startSafety(s, m, p)
 }
@@ -329,7 +344,7 @@ export function TrustedSection(_: { onAgreed?: (name: string) => void }) {
 
 function plus(time: string, min: number) {
   const [h, m] = (/^\d{1,2}:\d{2}/.test(time) ? time : '19:00').split(':').map(Number)
-  const t = h * 60 + m + min
+  const t = (h * 60 + m + min + 24 * 60) % (24 * 60)
   return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
 }
 

@@ -23,6 +23,8 @@ function mine(s: Awaited<ReturnType<typeof getSafety>>) {
     lastAt: s.last?.at ?? null,
     asked: s.asked?.kind ?? null,
     alarm: s.alarm?.kind ?? null,
+    armAt: s.armAt ?? null,
+    announced: Boolean(s.announced),
   }
 }
 

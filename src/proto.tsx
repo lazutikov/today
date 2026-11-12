@@ -8,7 +8,7 @@ import { mapsLink, nearestArea, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
 const DetailMap = lazy(() => import('./DetailMap'))
-import { guardianNames, loadSafety as loadSafetyNow, prefsSummary, SafetySettings, setLive, startForMatch, stopSafety, syncSafety, useSafetyStore, type MeetingInfo, type Safety } from './safety'
+import { guardianNames, isArmed, loadSafety as loadSafetyNow, prefsSummary, SafetySettings, setLive, startForMatch, stopSafety, syncSafety, useSafetyStore, type MeetingInfo, type Safety } from './safety'
 import { CITY, EVENTS, formatAreas, INVITERS, KHARKIV_EVENTS, KHARKIV_PEOPLE, KHARKIV_VENUES, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
@@ -358,7 +358,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     startForMatch(m.id, matchInfo(m)).then((err) => {
       if (err) return
       track('safety_on', { from: 'auto' })
-      say('🛡 Safety mode: довірені люди знають про зустріч. Поділись геопозицією в боті')
+      const s = loadSafetyNow()
+      say(
+        s && !isArmed(s)
+          ? `🛡 Safety mode увімкнеться о ${s.armAt}, за 10 хв до зустрічі`
+          : '🛡 Safety mode: довірені люди знають про зустріч. Поділись геопозицією в боті',
+      )
     })
   }, [safetyOn, prefs.on, safety, matches]) // eslint-disable-line react-hooks/exhaustive-deps
   const [toast, setToast] = useState<string | null>(null)
@@ -838,7 +843,12 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             Сьогодні: <b>{m.tag}</b>, {m.with[0].name}, {m.time}
             {safety?.matchId === m.id && (
               <span className="plan-banner-safe">
-                🛡 {safety.live ? `${guardianNames(safety)} знає, де ти, до ${safety.until}` : 'Залишився крок: геопозиція в боті'}
+                🛡{' '}
+                {!isArmed(safety)
+                  ? `Safety mode з ${safety.armAt}`
+                  : safety.live
+                    ? `${guardianNames(safety)} знає, де ти, до ${safety.until}`
+                    : 'Залишився крок: геопозиція в боті'}
               </span>
             )}
           </span>
@@ -1060,7 +1070,9 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
             const err = await startForMatch(m.id, matchInfo(m))
             if (err) return say(err)
             track('safety_on', { from: 'match' })
-            setOverlay({ t: 'safety-bot', match: m })
+            const s = loadSafetyNow()
+            if (s && !isArmed(s)) say(`Safety mode увімкнеться о ${s.armAt}: тоді напишемо довіреним людям і бот попросить геопозицію`)
+            else setOverlay({ t: 'safety-bot', match: m })
           }}
           onSafetySettings={() => setOverlay({ t: 'safety-settings' })}
           onSafetyBot={() => setOverlay({ t: 'safety-bot', match: overlay.match })}
@@ -1649,7 +1661,9 @@ function MatchSheet({
               <span>
                 {!safety
                   ? prefsSummary()
-                  : safety.live
+                  : !isArmed(safety)
+                    ? `Увімкнеться о ${safety.armAt}: напишемо ${guardianNames(safety)}, бот попросить геопозицію`
+                    : safety.live
                     ? `${guardianNames(safety)} знає, де ти, до ${safety.until} · «Все добре?» о ${safety.checkAt}`
                     : 'Залишився крок: поділись геопозицією з ботом'}
               </span>
@@ -1657,7 +1671,7 @@ function MatchSheet({
             <span className="dtoggle-knob" aria-hidden="true" />
           </button>
           <div className="safety-row-links">
-            {safety && !safety.live && (
+            {safety && !safety.live && isArmed(safety) && (
               <button className="dlink" onClick={onSafetyBot}>
                 Поділитися геопозицією
               </button>
