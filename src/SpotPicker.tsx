@@ -84,7 +84,7 @@ export function SpotPicker({ current, onClose }: { current: Spot; onClose: () =>
             </span>
             <span>
               <b>{locating ? 'Шукаю, де ти…' : 'Моя локація'}</b>
-              <span>Плани поруч і скільки до них добиратися</span>
+              <span>Події поруч і скільки до них добиратися</span>
             </span>
           </button>
         </li>

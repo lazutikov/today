@@ -272,7 +272,7 @@ export function Dock({
           className={tab === 'events' ? 'seg on' : 'seg'}
           onClick={() => onTab('events')}
         >
-          Плани
+          Події
         </button>
         <button
           role="tab"

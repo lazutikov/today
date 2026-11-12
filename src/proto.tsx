@@ -889,7 +889,7 @@ function FeedApp({ onSignOut, onOnboarding }: { onSignOut: () => void; onOnboard
                   ? 'Геолокацію вимкнено. Увімкни: 🔒 біля адреси сайту → Дозволи, і натисни тут'
                   : here.state === 'far'
                     ? `Ти зараз не ${CITY === 'warsaw' ? 'у Варшаві' : 'у Львові'}, тому час у дорозі не показуємо`
-                    : 'Показати, скільки добиратися до планів'}
+                    : 'Показати, скільки добиратися до подій'}
           </button>
           <button
             className="loc-chip-x"
@@ -954,7 +954,7 @@ function FeedApp({ onSignOut, onOnboarding }: { onSignOut: () => void; onOnboard
           <li className="search-empty">
             <p>
               {query.trim() ? `За «${query.trim()}»` : 'За цими фільтрами'} нічого{' '}
-              {tab === 'events' ? 'серед планів' : 'серед людей'}.
+              {tab === 'events' ? 'серед подій' : 'серед людей'}.
             </p>
             {radiusOn && filters.radius! < 5 && (
               <button className="dlink" onClick={() => setFilters({ ...filters, radius: filters.radius === 1 ? 3 : 5 })}>
@@ -1851,7 +1851,7 @@ function ProfileSheet({
         onClick={() => setNotify(!notify)}
       >
         <span className="dtoggle-text">
-          <b>Нові плани поруч</b>
+          <b>Нові події поруч</b>
           <span>Бот напише, коли поруч з твоїми місцями хтось шукає компанію. Не частіше 2 разів на день.</span>
         </span>
         <span className="dtoggle-knob" aria-hidden="true" />
@@ -1891,7 +1891,7 @@ function CreateSheet({
   onClose: () => void
   onPublish: (card: FeedCard) => void
 }) {
-  const [kind, setKind] = useState<'person' | 'event'>('person')
+  const [kind, setKind] = useState<'person' | 'event'>('event')
   const [headline, setHeadline] = useState('')
   const [from, setFrom] = useState('18:00')
   const [to, setTo] = useState('21:00')
@@ -1991,19 +1991,19 @@ function CreateSheet({
       <div className="dseg" role="tablist" aria-label="Тип поста">
         <button
           role="tab"
-          aria-selected={kind === 'person'}
-          className={kind === 'person' ? 'on' : ''}
-          onClick={() => switchKind('person')}
-        >
-          Покличте мене
-        </button>
-        <button
-          role="tab"
           aria-selected={kind === 'event'}
           className={kind === 'event' ? 'on' : ''}
           onClick={() => switchKind('event')}
         >
           Кличу з собою
+        </button>
+        <button
+          role="tab"
+          aria-selected={kind === 'person'}
+          className={kind === 'person' ? 'on' : ''}
+          onClick={() => switchKind('person')}
+        >
+          Покличте мене
         </button>
       </div>
 

@@ -422,7 +422,7 @@ export function Onboarding({
                 { text: 'шукаєш', tag: 'Кіно' },
               ]}
             />
-            <p className="ob-lead">Покажемо такі плани першими й напишемо, коли щось схоже з’явиться поруч.</p>
+            <p className="ob-lead">Покажемо такі події першими й напишемо, коли щось схоже з’явиться поруч.</p>
             <p className="ob-label">Як любиш проводити час</p>
             <div className="ob-chips">
               {TAGS.map((t) => (
