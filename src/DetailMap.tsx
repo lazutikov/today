@@ -1,7 +1,7 @@
 /**
  * Small, still map in a card's details.
  * Plan: a pin on the venue, tap opens directions.
- * Free time: a soft circle "somewhere here" (the point is rounded to ~500 m), never a pin.
+ * Free time from GPS: a soft circle "somewhere here" (rounded to ~300 m), never a pin.
  * My position, when known, is a small dark dot.
  */
 import { useEffect, useRef, useState } from 'react'
@@ -56,7 +56,7 @@ export default function DetailMap({
 
     const p = L.latLng(point.lat, point.lon)
     if (area) {
-      L.circle(p, { radius: 550, stroke: false, fillColor: '#FF5F1F', fillOpacity: 0.22, interactive: false }).addTo(m)
+      L.circle(p, { radius: 330, stroke: false, fillColor: '#FF5F1F', fillOpacity: 0.22, interactive: false }).addTo(m)
     } else {
       L.marker(p, { icon: PIN, interactive: false, keyboard: false }).addTo(m)
     }
@@ -77,9 +77,9 @@ export default function DetailMap({
       const minZoom = area ? 13 : 14
       if (me && nearMe) {
         const b = L.latLngBounds([p, [me.lat, me.lon]])
-        if (area) b.extend(p.toBounds(1100))
+        if (area) b.extend(p.toBounds(700))
         const z = m.getBoundsZoom(b, false, L.point(64, 80))
-        if (z >= minZoom) return m.fitBounds(b, { paddingTopLeft: [32, 24], paddingBottomRight: [32, 56], maxZoom: 16 })
+        if (z >= minZoom) return m.fitBounds(b, { paddingTopLeft: [32, area ? 24 : 52], paddingBottomRight: [32, area ? 56 : 40], maxZoom: 16 })
       }
       m.setView(p, area ? 13 : 15)
     }
@@ -102,7 +102,7 @@ export default function DetailMap({
           Маршрут
         </a>
       )}
-      {area && <span className="dmap-note">Десь тут, ±500 м</span>}
+      {area && <span className="dmap-note">Десь тут, ±300 м</span>}
     </div>
   )
 }

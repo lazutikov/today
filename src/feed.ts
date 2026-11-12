@@ -28,7 +28,7 @@ export type FeedCard = {
   /** Districts as picked (the card shows them joined in `place`) */
   areas?: string[]
   /** Free-time post: roughly where the person is (≈500 m), shown only as a label + distance */
-  near?: { lat: number; lon: number; label: string }
+  near?: { lat: number; lon: number; label: string; exact?: boolean }
   /** Free-time post: how far the person is ready to go, km */
   reach?: number
   /** Venue picked on the map */
@@ -220,7 +220,7 @@ const lvivPlace: Record<string, string> = {
 
 const lvivNear: Record<string, { near: NonNullable<FeedCard['near']>; reach: number }> = {
   'person-1': { near: { lat: 49.8415, lon: 24.032, label: 'біля Ринку' }, reach: 5 },
-  'person-2': { near: { lat: 49.8445, lon: 24.026, label: 'біля Опери' }, reach: 10 },
+  'person-2': { near: { lat: 49.84395, lon: 24.02625, label: 'Оперний театр', exact: true }, reach: 10 },
   'person-3': { near: { lat: 49.8235, lon: 24.0235, label: 'біля Стрийського парку' }, reach: 2 },
 }
 

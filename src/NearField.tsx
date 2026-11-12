@@ -9,7 +9,8 @@ import { PinIcon } from './ui'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
 
-export type Near = { lat: number; lon: number; label: string }
+/** exact: a place picked on the map (shown as a pin); otherwise a ~300 m block from GPS (a circle) */
+export type Near = { lat: number; lon: number; label: string; exact?: boolean }
 
 export function NearField({
   value,
@@ -52,7 +53,11 @@ export function NearField({
         <b>
           <PinIcon /> {value ? value.label : placeholder}
         </b>
-        <span>Інші бачать тільки цю назву і відстань, не точку.</span>
+        <span>
+          {value?.exact
+            ? 'Інші побачать це місце на карті.'
+            : 'Інші бачать район приблизно ±300 м, не точку.'}
+        </span>
       </div>
       <div className="near-actions">
         <button className="dchip" onClick={here} disabled={busy}>
@@ -71,8 +76,8 @@ export function NearField({
             onPick={(pl) => {
               setPicking(false)
               if (!Number.isFinite(pl.lat)) return setNote('Без карти не вийде, спробуй «Де я зараз».')
-              const pt = roundPoint({ lat: pl.lat, lon: pl.lon })
-              onChange({ ...pt, label: pl.name })
+              // Chosen on purpose: shown as is
+              onChange({ lat: pl.lat, lon: pl.lon, label: pl.name, exact: true })
             }}
           />
         </Suspense>

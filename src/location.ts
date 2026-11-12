@@ -35,9 +35,9 @@ export function travelLabel(km: number): string {
   return `~${round(((km * 1.4) / 25) * 60 + 4)} хв на таксі`
 }
 
-/** About 500 m grid: enough for "~2 км", not enough to find a building */
+/** About 300 m grid: a block, not a building */
 export function roundPoint<T extends Coords>(c: T): T {
-  const r = (v: number) => Math.round(v / 0.005) * 0.005
+  const r = (v: number) => Math.round(v / 0.003) * 0.003
   return { ...c, lat: Number(r(c.lat).toFixed(3)), lon: Number(r(c.lon).toFixed(3)) }
 }
 
@@ -114,7 +114,7 @@ export function useMyLocation() {
 }
 
 /** Where a card is: the venue for a plan, the rough point for free time */
-export function cardPoint(c: { lat?: number; lon?: number; near?: Coords }): Coords | null {
+export function cardPoint(c: { lat?: number; lon?: number; near?: Coords & { exact?: boolean } }): Coords | null {
   if (c.lat !== undefined && c.lon !== undefined) return { lat: c.lat, lon: c.lon }
   return c.near ? { lat: c.near.lat, lon: c.near.lon } : null
 }

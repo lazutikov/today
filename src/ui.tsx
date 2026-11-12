@@ -161,7 +161,7 @@ export function placeLine(
   return [far, area, shortAddress(card.venueAddress)].filter(Boolean).join(' · ')
 }
 
-/** The point is rounded to ~500 m, so don't pretend to know metres */
+/** Points can be rough (±300 m), so never closer than 500 m */
 function roughDistance(km: number) {
   return `${formatDistance(Math.max(0.5, km))} від вас`
 }

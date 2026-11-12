@@ -174,17 +174,19 @@ export function cleanCity(v: unknown): string {
   return /^[\p{L}\p{N} '’.-]{2,40}$/u.test(s) ? s : 'lviv'
 }
 
-export type Near = { lat: number; lon: number; label: string }
+export type Near = { lat: number; lon: number; label: string; exact?: boolean }
 
-/** A rough point (~500 m grid): enough for "~2 км", never a door. */
+/** A point for free time: exact if picked on the map, else a ~300 m block. */
 export function cleanNear(v: unknown): Near | undefined {
   if (!v || typeof v !== 'object') return undefined
   const o = v as Record<string, unknown>
   const lat = Number(o.lat)
   const lon = Number(o.lon)
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return undefined
-  const r = (x: number) => Number((Math.round(x / 0.005) * 0.005).toFixed(3))
   const label = typeof o.label === 'string' ? o.label.trim().slice(0, 60) : ''
+  // A place picked on the map is shown as is; "where I am" stays a ~300 m block
+  if (o.exact === true) return { lat: Number(lat.toFixed(6)), lon: Number(lon.toFixed(6)), label: label || 'поруч', exact: true }
+  const r = (x: number) => Number((Math.round(x / 0.003) * 0.003).toFixed(3))
   return { lat: r(lat), lon: r(lon), label: label || 'поруч' }
 }
 

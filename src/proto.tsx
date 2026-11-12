@@ -1272,7 +1272,7 @@ function DetailSheet({
         </Suspense>
       ) : card.near ? (
         <Suspense fallback={<div className="dmap" />}>
-          <DetailMap point={card.near} area me={from} />
+          <DetailMap point={card.near} area={!card.near.exact} me={from} />
         </Suspense>
       ) : null}
       {card.mine ? (
