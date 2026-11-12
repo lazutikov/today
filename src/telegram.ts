@@ -86,7 +86,7 @@ function loadWidget(): Promise<Widget> {
 
 export async function telegramLogin(): Promise<TgUser> {
   if (!BOT_ID) {
-    await new Promise((r) => setTimeout(r, 1200))
+    await new Promise((r) => setTimeout(r, 300))
     const fake = { id: 0, first_name: 'Гість', username: null, photo_url: null }
     saveTgUser(fake)
     return fake
