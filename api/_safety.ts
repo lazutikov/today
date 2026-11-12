@@ -118,10 +118,29 @@ export async function addTrustedHandle(ownerId: number, raw: unknown): Promise<{
   const list = await getTrusted(ownerId)
   if (list.some((t) => t.label === h)) return { ok: false, error: 'exists' }
   if (list.length >= 3) return { ok: false, error: 'too_many' }
+  // Find them and say hello from the sender account, so they know who we are
+  let peer: Peer | undefined
+  if (await senderReady()) {
+    const owner = ((await kv('GET', `uname:${ownerId}`)) as string | null) ?? 'Твій знайомий'
+    const p = (await kv('GET', `profile:${ownerId}`)) as string | null
+    const gender = p ? (JSON.parse(p) as { gender?: SafetyState['gender'] }).gender : undefined
+    const found = await withSender(async (c) => {
+      const person = await findPerson(c, h.replace(/^@/, ''))
+      if (!person) return null
+      await sendText(
+        c,
+        person,
+        `Привіт! Це today — сервіс зустрічей на сьогодні.\n\n<b>${esc(owner)} ${verb(gender, 'додав', 'додала', 'додав(ла)')} вас як довірену людину.</b> Коли буде зустріч, ми напишемо вам тут, де і з ким. А якщо зв’язку не буде — де ${verb(gender, 'він був', 'вона була', 'людина була')} востаннє.\n\nНічого робити не треба. Не хочете отримувати — напишіть «стоп».`,
+      )
+      return person
+    }).catch(() => null)
+    if (!found) return { ok: false, error: h.startsWith('+') ? 'not_found_phone' : 'not_found' }
+    peer = found
+  }
   const id = randomBytes(9).toString('base64url')
-  const next = [...list, { handle: id, label: h, status: 'ok' as const, invitedAt: Math.floor(Date.now() / 1000) }]
+  const next = [...list, { handle: id, label: h, status: 'ok' as const, peer, invitedAt: Math.floor(Date.now() / 1000) }]
   await saveTrusted(ownerId, next)
-  await phCapture('trusted_added', String(ownerId), { by: h.startsWith('+') ? 'phone' : 'nick' })
+  await phCapture('trusted_added', String(ownerId), { by: h.startsWith('+') ? 'phone' : 'nick', sent: Boolean(peer) })
   return { ok: true, list: next }
 }
 

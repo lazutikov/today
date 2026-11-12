@@ -160,6 +160,8 @@ export function cleanHandle(raw: string): { handle: string; error?: string } {
 
 const ERRORS: Record<string, string> = {
   bad_handle: 'Впиши нік у Telegram (@katya) або номер телефону (+380…)',
+  not_found: 'Не знайшли такий нік у Telegram. Перевір його.',
+  not_found_phone: 'За цим номером нікого не знайшли: людина могла сховати номер. Спитай її нік.',
   exists: 'Цю людину вже додано',
   too_many: 'Не більше трьох людей',
 }
@@ -193,7 +195,7 @@ export async function addTrusted(raw: string): Promise<string | null> {
       write(TRUSTED_KEY, r.list)
       return null
     }
-    return ERRORS[r.error ?? ''] ?? 'Не вдалося додати. Спробуй ще раз.'
+    return ERRORS[r.error ?? ''] ?? 'Не вдалося написати людині. Спробуй ще раз.'
   }
   write(TRUSTED_KEY, [...list, { handle: `demo${Date.now().toString(36)}`, name: '', label: shownAs, status: 'ok' }])
   return null
@@ -314,7 +316,7 @@ export function TrustedSection(_: { onAgreed?: (name: string) => void }) {
             aria-label="Нік або номер у Telegram"
           />
           <button className="dchip on" onClick={add} disabled={busy}>
-            {busy ? '…' : 'Додати'}
+            {busy ? 'Пишемо…' : 'Додати'}
           </button>
         </div>
       )}
