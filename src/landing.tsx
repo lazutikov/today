@@ -13,7 +13,7 @@ import {
   type TgUser,
 } from './telegram'
 import { identify, track } from './track'
-import { GenderAge, Sticker } from './ui'
+import { Sticker } from './ui'
 import { fetchMe, isLive } from './live'
 import { savePrefs, syncSafety, TrustedSection, useSafetyStore } from './safety'
 
@@ -362,12 +362,43 @@ export function Onboarding({
             />
             {askGa && (
               <>
-                <p className="ob-label">
-                  Стать і вік <span>необов’язково</span>
-                </p>
-                <div className="ob-ga">
-                  <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
+                <p className="ob-label">Стать</p>
+                <div className="ob-gender" role="radiogroup" aria-label="Стать">
+                  {(['Чоловік', 'Жінка'] as const).map((g) => (
+                    <button
+                      key={g}
+                      role="radio"
+                      aria-checked={ga.gender === g}
+                      className={ga.gender === g ? 'ob-chip on' : 'ob-chip'}
+                      onClick={() => setGa({ ...ga, gender: g })}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                  <button
+                    role="radio"
+                    aria-checked={!ga.gender}
+                    className={!ga.gender ? 'ob-chip ob-chip-wide on' : 'ob-chip ob-chip-wide'}
+                    onClick={() => setGa({ ...ga, gender: undefined })}
+                  >
+                    Не вказувати
+                  </button>
                 </div>
+                <label className="ob-label" htmlFor="o-age">
+                  Вік
+                </label>
+                <input
+                  id="o-age"
+                  className="ob-input ob-age"
+                  inputMode="numeric"
+                  maxLength={2}
+                  placeholder="Наприклад, 27"
+                  value={ga.age ?? ''}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value.replace(/\D/g, ''), 10)
+                    setGa({ ...ga, age: Number.isFinite(n) ? n : undefined })
+                  }}
+                />
               </>
             )}
             <div className="ob-preview" aria-label="Так тебе бачитимуть">

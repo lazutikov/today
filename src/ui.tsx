@@ -439,7 +439,7 @@ export function GenderAge({
         className="dinput dinput-age"
         inputMode="numeric"
         aria-label="Вік"
-        placeholder="Вік, необов’язково"
+        placeholder="Вік"
         maxLength={2}
         value={age ?? ''}
         onChange={(e) => {

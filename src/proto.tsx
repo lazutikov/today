@@ -1817,7 +1817,7 @@ function ProfileSheet({
         onChange={(e) => setBio(e.target.value.replace(/\s*\n\s*/g, ' '))}
       />
       <p className="dlabel">
-        Стать і вік <span className="dopt">необов’язково</span>
+        Стать і вік
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
       <p className="dlabel">

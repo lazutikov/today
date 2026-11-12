@@ -2977,3 +2977,9 @@ html:has(.screen) body {
 .ob-safety .dchip.on { background: #fc601e; border-color: #fc601e; color: #000; }
 .ob-safety > .dhint { display: none; }
 .ob-safety .dlabel { margin-top: 24px; }
+.ob-gender { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ob-gender .ob-chip { width: 100%; }
+.ob-chip-wide { grid-column: 1 / -1; }
+.ob-age { max-width: 180px; }
+.ob-label { display: block; }
+.ob-age { display: block; }
