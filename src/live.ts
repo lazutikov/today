@@ -158,3 +158,40 @@ export async function answerRequest(
 ): Promise<{ ok: boolean; status?: string; error?: string; message?: string; match?: ReqStatus['match'] }> {
   return api('/api/requests', { method: 'POST', body: JSON.stringify({ id, answer: yes ? 'yes' : 'no', reason }) })
 }
+
+/* ---------- Безпечна зустріч ---------- */
+
+export type TrustedRow = { handle: string; name: string; status: 'wait' | 'ok' | 'no' }
+
+export async function fetchTrusted(): Promise<{ ready: boolean; list: TrustedRow[] }> {
+  const r = await api<{ ok: boolean; ready?: boolean; list?: TrustedRow[] }>('/api/trusted')
+  return { ready: Boolean(r.ready), list: r.list ?? [] }
+}
+export async function addTrustedApi(handle: string): Promise<{ ok: boolean; list?: TrustedRow[]; error?: string }> {
+  return api('/api/trusted', { method: 'POST', body: JSON.stringify({ handle }) })
+}
+export async function removeTrustedApi(handle: string) {
+  await api(`/api/trusted?handle=${encodeURIComponent(handle)}`, { method: 'DELETE' })
+}
+
+export type ServerSafety = {
+  matchId: string
+  guardians: string[]
+  checkAt: number
+  until: number
+  fence: boolean
+  live: boolean
+  lastAt: number | null
+  asked: string | null
+  alarm: string | null
+}
+export async function fetchSafety(): Promise<{ ready: boolean; safety: ServerSafety | null }> {
+  const r = await api<{ ok: boolean; ready?: boolean; safety?: ServerSafety | null }>('/api/safety')
+  return { ready: Boolean(r.ready), safety: r.safety ?? null }
+}
+export async function startSafetyApi(body: Record<string, unknown>): Promise<{ ok: boolean; safety?: ServerSafety; error?: string }> {
+  return api('/api/safety', { method: 'POST', body: JSON.stringify({ action: 'start', ...body }) })
+}
+export async function stopSafetyApi() {
+  await api('/api/safety', { method: 'POST', body: JSON.stringify({ action: 'stop' }) })
+}

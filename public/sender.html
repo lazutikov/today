@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>today · акаунт для безпеки</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&family=Unbounded:wght@700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #ebebeb; color: #141414; font-family: 'Manrope', system-ui, sans-serif; }
+  main { max-width: 460px; margin: 0 auto; padding: 24px 16px 48px; }
+  .brand { font-family: 'Unbounded', sans-serif; font-size: 22px; margin-bottom: 18px; }
+  .card { background: #fff; border-radius: 24px; padding: 20px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { font-size: 15px; line-height: 1.5; margin: 8px 0; }
+  .muted { color: #6b6b6b; font-size: 14px; }
+  label { display: block; font-weight: 700; font-size: 14px; margin: 14px 0 6px; }
+  input { width: 100%; font: inherit; font-size: 16px; padding: 13px 14px; border-radius: 14px; border: 0; background: #ebebeb; }
+  button { width: 100%; margin-top: 14px; border: 0; border-radius: 99px; padding: 14px; font: inherit; font-weight: 700; font-size: 16px; background: #fc601e; color: #141414; cursor: pointer; }
+  button.ghost { background: #fff; border: 1.5px solid #d6d6d6; }
+  button:disabled { opacity: .5; }
+  .err { color: #c22a17; font-size: 14px; }
+  .ok { background: #e3f5ea; color: #1f6b3f; border-radius: 16px; padding: 12px 14px; font-weight: 600; }
+  ol { padding-left: 20px; line-height: 1.6; font-size: 15px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">today</div>
+  <div class="card">
+    <h1>Акаунт «today · безпека»</h1>
+    <p class="muted">Від цього акаунта довірені люди отримують запрошення і тривоги. Підключається один раз. Код і пароль ідуть одразу в Telegram, ми їх не зберігаємо.</p>
+
+    <div id="status"><p class="muted">Перевіряємо…</p></div>
+
+    <form id="phoneForm" hidden>
+      <label for="phone">Номер телефону акаунта</label>
+      <input id="phone" type="tel" placeholder="+380…" autocomplete="off" required />
+      <button type="submit">Надіслати код</button>
+    </form>
+
+    <form id="codeForm" hidden>
+      <p>Telegram надіслав код у чат «Telegram» на цьому акаунті.</p>
+      <label for="code">Код</label>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" required />
+      <div id="pwdBox" hidden>
+        <label for="pwd">Пароль двоетапної перевірки</label>
+        <input id="pwd" type="password" autocomplete="off" />
+      </div>
+      <button type="submit">Підключити</button>
+    </form>
+
+    <p id="err" class="err" hidden></p>
+  </div>
+</main>
+<script>
+(() => {
+  const token = (() => { try { return localStorage.getItem('today.session.v1') || '' } catch { return '' } })()
+  const $ = (id) => document.getElementById(id)
+  const call = (method, body) =>
+    fetch('/api/sender', { method, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: body ? JSON.stringify(body) : undefined })
+      .then((r) => r.json()).catch(() => ({ ok: false, error: 'network' }))
+  const err = (t) => { $('err').hidden = !t; $('err').textContent = t || '' }
+  const ERR = {
+    owner_only: 'Ця сторінка лише для власника today. Увійди на сайті через свій Telegram і відкрий її знову.',
+    no_api_id: 'У Vercel немає TG_API_ID і TG_API_HASH. Додай їх і зроби Redeploy.',
+    bad_phone: 'Перевір номер.',
+    bad_code: 'Код не підійшов. Перевір і спробуй ще раз.',
+    expired: 'Код застарів. Почни спочатку.',
+    bad_password: 'Пароль не підійшов.',
+    network: 'Немає зв’язку. Спробуй ще раз.',
+  }
+
+  async function load() {
+    const r = await call('GET')
+    if (!r.ok) { $('status').innerHTML = ''; return err(ERR[r.error] || 'Помилка: ' + r.error) }
+    if (!r.configured) { $('status').innerHTML = ''; return err(ERR.no_api_id) }
+    if (r.account) {
+      $('status').innerHTML = `<p class="ok">Підключено${r.account.username ? ': @' + r.account.username : ''}${r.account.name ? ' (' + r.account.name + ')' : ''}</p>
+        <ol><li>Перевір, що в акаунта є ім’я «today · безпека» і фото.</li><li>Додай когось у «Довірені люди» на сайті — їм прийде запрошення.</li></ol>
+        <button class="ghost" id="logout">Відключити</button>`
+      $('logout').onclick = async () => { await call('DELETE'); location.reload() }
+      $('phoneForm').hidden = true; $('codeForm').hidden = true
+      return
+    }
+    $('status').innerHTML = ''
+    $('phoneForm').hidden = false
+  }
+
+  $('phoneForm').onsubmit = async (e) => {
+    e.preventDefault(); err('')
+    const b = e.submitter; b.disabled = true
+    const r = await call('POST', { phone: $('phone').value })
+    b.disabled = false
+    if (!r.ok) return err(ERR[r.error] || 'Помилка: ' + r.error)
+    $('phoneForm').hidden = true; $('codeForm').hidden = false; $('code').focus()
+  }
+
+  $('codeForm').onsubmit = async (e) => {
+    e.preventDefault(); err('')
+    const b = e.submitter; b.disabled = true
+    const r = await call('POST', { code: $('code').value, password: $('pwd').value || undefined })
+    b.disabled = false
+    if (r.ok) return load()
+    if (r.step === 'need_password') { $('pwdBox').hidden = false; $('pwd').focus(); return err('На акаунті є двоетапна перевірка: введи пароль.') }
+    if (r.step === 'expired') { $('codeForm').hidden = true; $('phoneForm').hidden = false }
+    err(ERR[r.step] || ERR[r.error] || 'Помилка: ' + (r.step || r.error))
+  }
+
+  load()
+})()
+</script>
+</body>
+</html>

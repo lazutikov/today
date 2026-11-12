@@ -1,0 +1,17 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #ebebeb; color: #141414; font-family: 'Manrope', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.page { max-width: 560px; margin: 0 auto; padding: 18px 16px 40px; }
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.brand { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 22px; }
+h1 { font-size: 22px; margin: 0 0 8px; line-height: 1.2; }
+p { margin: 6px 0; font-size: 15px; line-height: 1.45; }
+.muted { color: #6b6b6b; }
+.small { font-size: 13px; margin-top: 14px; }
+.badge { font-size: 13px; font-weight: 700; padding: 5px 11px; border-radius: 99px; background: #f2f2f2; color: #6b6b6b; }
+.badge.ok { background: #e3f5ea; color: #1f6b3f; }
+.badge.alarm { background: #fde3de; color: #c22a17; }
+.alert { background: #d6331f; color: #fff; border-radius: 20px; padding: 16px; margin-bottom: 12px; font-size: 15px; line-height: 1.45; }
+.alert b { display: block; font-size: 18px; margin-bottom: 4px; }
+.map { height: 300px; border-radius: 22px; overflow: hidden; background: #e2dfd8; isolation: isolate; }
+.card { background: #fff; border-radius: 22px; padding: 18px; margin-top: 12px; }
+.route { display: inline-block; margin-top: 8px; padding: 10px 16px; border-radius: 99px; background: #fc601e; color: #141414; font-weight: 700; text-decoration: none; }

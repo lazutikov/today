@@ -12,7 +12,7 @@ export async function GET(request: Request): Promise<Response> {
   const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url, secret_token: webhookSecret(token), allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
+    body: JSON.stringify({ url, secret_token: webhookSecret(token), allowed_updates: ['message', 'edited_message', 'callback_query'], drop_pending_updates: true }),
   })
   const tg = (await res.json()) as { ok: boolean; description?: string }
 

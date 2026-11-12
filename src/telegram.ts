@@ -17,6 +17,9 @@ export function miniAppLink(city: string): string | null {
 
 export const telegramEnabled = Boolean(BOT_ID)
 
+/** t.me link to the bot with a /start argument */
+export const botStartLink = (arg: string) => (BOT_NAME ? `https://t.me/${BOT_NAME}?start=${arg}` : null)
+
 type WebApp = {
   initData: string
   initDataUnsafe?: { start_param?: string }

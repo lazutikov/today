@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto'
 import { CODE_RE, CODE_TTL, json, kv, kvReady, ownerId, OWNER_USERNAME, phCapture, tg } from './_kv.js'
 import { answerReq, deleteUser, saveOutcome, type Outcome } from './_social.js'
 import { setNotify } from './_profile.js'
+import { getSafety, onAnswer, onLocation } from './_safety.js'
 
 export function webhookSecret(token: string) {
   return createHash('sha256').update(`today-webhook:${token}`).digest('hex').slice(0, 48)
@@ -22,11 +23,16 @@ type Update = {
     data?: string
     message?: { chat: { id: number }; message_id: number; text?: string }
   }
-  message?: {
-    chat: { id: number }
-    text?: string
-    from?: { id: number; first_name?: string; username?: string }
-  }
+  message?: Msg
+  /** Live location arrives as edits of the location message */
+  edited_message?: Msg
+}
+
+type Msg = {
+  chat: { id: number }
+  text?: string
+  from?: { id: number; first_name?: string; username?: string }
+  location?: { latitude: number; longitude: number; live_period?: number }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -37,6 +43,35 @@ export async function POST(request: Request): Promise<Response> {
   const update = (await request.json()) as Update
 
   const cb = update.callback_query
+
+  // Безпечна зустріч: live location (new message or its edits)
+  const loc = update.message?.location ? update.message : update.edited_message?.location ? update.edited_message : null
+  if (loc?.from && loc.location) {
+    const known = await onLocation(loc.from.id, loc.location.latitude, loc.location.longitude)
+    if (!known && update.message?.location)
+      await send(token, loc.chat.id, 'Підстраховка зараз не увімкнена. Увімкни її в матчі на сайті, тоді я почну стежити.')
+    else if (known && update.message?.location && !loc.location.live_period)
+      await send(
+        token,
+        loc.chat.id,
+        'Це разова геопозиція. Щоб я бачив тебе весь вечір, надішли саме «Транслювати геопозицію» → 8 годин.',
+      )
+    return json({ ok: true })
+  }
+  if (update.edited_message) return json({ ok: true })
+
+  // Безпечна зустріч: answers to «Все добре?»
+  if (cb?.data?.startsWith('sf:')) {
+    const note = await onAnswer(cb.from.id, cb.data.slice(3))
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: note })
+    if (cb.message)
+      await tg('editMessageText', {
+        chat_id: cb.message.chat.id,
+        message_id: cb.message.message_id,
+        text: `${cb.message.text ?? ''}\n\n${note}`,
+      })
+    return json({ ok: true })
+  }
 
   // «Зустрілися?» the morning after
   if (cb?.data?.startsWith('m:')) {
@@ -150,6 +185,18 @@ export async function POST(request: Request): Promise<Response> {
         inline_keyboard: [[{ text: 'Відкрити сайт', url: `${site}/app` }]],
       })
     }
+    return json({ ok: true })
+  }
+
+  if (arg === 'safe') {
+    const s = await getSafety(msg.from.id)
+    await send(
+      token,
+      msg.chat.id,
+      s
+        ? '🛡 Останній крок: поділись геопозицією наживо.\n\n📎 (скріпка) → Геопозиція → «Транслювати геопозицію» → 8 годин.\n\nTelegram передаватиме її, навіть коли телефон у кишені. Твої довірені люди побачать її лише під час зустрічі.'
+        : 'Підстраховка ще не увімкнена. Увімкни її в матчі на сайті, а потім повертайся сюди.',
+    )
     return json({ ok: true })
   }
 

@@ -1,0 +1,13 @@
+# Безпечна зустріч: every 5 minutes ask «Все добре?» / raise alarms that are due.
+# The endpoint only acts on what is due, so it needs no secret.
+name: safety tick
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: curl -fsS --max-time 60 "https://today-pvfu.vercel.app/api/safety?tick=1"

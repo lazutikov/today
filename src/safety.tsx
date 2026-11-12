@@ -8,10 +8,20 @@
  * Live location itself is shared with the bot in Telegram (works in the
  * background), so the last step opens the bot.
  *
- * Server side (sending from the account, «+» replies, timers, /safe page)
- * comes next; here the «+» is simulated so the flow can be tried.
+ * Signed in on the real site this talks to /api/trusted and /api/safety;
+ * in demo builds the «+» and the live location are simulated.
  */
 import { useEffect, useState } from 'react'
+import {
+  addTrustedApi,
+  fetchSafety,
+  fetchTrusted,
+  isLive,
+  removeTrustedApi,
+  startSafetyApi,
+  stopSafetyApi,
+} from './live'
+import { botStartLink } from './telegram'
 
 /** Not public yet: always on in test builds (no bot), on the real site only with ?safety=1 (remembered) */
 export const SAFETY_PREVIEW = (() => {
@@ -34,6 +44,7 @@ export type Safety = {
   until: string // "22:00"
   fence: boolean
   live: boolean
+  alarm?: string | null
 }
 
 const TRUSTED_KEY = 'today.trusted'
@@ -62,6 +73,38 @@ function write(key: string, v: unknown) {
 export const loadTrusted = () => read<Trusted[]>(TRUSTED_KEY, [])
 export const loadSafety = () => read<Safety | null>(SAFETY_KEY, null)
 
+/** The server has the «today · безпека» account connected: the feature is on for everyone */
+let serverReady = false
+
+/** Pull trusted people and the safety net from the server (real site only) */
+export async function syncSafety() {
+  if (!isLive()) return
+  const [t, s] = await Promise.all([fetchTrusted().catch(() => null), fetchSafety().catch(() => null)])
+  if (t) {
+    serverReady = t.ready
+    write(TRUSTED_KEY, t.list)
+  }
+  if (s) {
+    const local = loadSafety()
+    if (!s.safety) {
+      if (local) write(SAFETY_KEY, null)
+    } else {
+      const hm = (ms: number) =>
+        new Date(ms).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })
+      write(SAFETY_KEY, {
+        matchId: s.safety.matchId,
+        guardians: s.safety.guardians,
+        checkAt: hm(s.safety.checkAt),
+        until: hm(s.safety.until),
+        fence: s.safety.fence,
+        live: s.safety.live,
+        alarm: s.safety.alarm,
+      } satisfies Safety)
+    }
+  }
+  emit()
+}
+
 export function useSafetyStore() {
   const [, bump] = useState(0)
   useEffect(() => {
@@ -71,7 +114,7 @@ export function useSafetyStore() {
       listeners.delete(f)
     }
   }, [])
-  return { trusted: loadTrusted(), safety: loadSafety() }
+  return { trusted: loadTrusted(), safety: loadSafety(), enabled: SAFETY_PREVIEW || serverReady }
 }
 
 /** @katya_lviv → katya_lviv; +380… stays a phone */
@@ -85,12 +128,29 @@ export function cleanHandle(raw: string): { handle: string; error?: string } {
 
 const NAMES: Record<string, string> = { katya_lviv: 'Катя', mama_olena: 'Олена' }
 
-export function addTrusted(raw: string, onAgreed: (name: string) => void): string | null {
+const ERRORS: Record<string, string> = {
+  bad_handle: 'Такого ніку в Telegram не буває. Перевір, будь ласка.',
+  exists: 'Цю людину вже додано',
+  too_many: 'Не більше трьох людей',
+  not_found_phone: 'За цим номером нікого не знайшли: людина могла сховати номер. Спитай її нік.',
+  not_ready: 'Ця функція ще налаштовується. Спробуй трохи пізніше.',
+}
+
+export async function addTrusted(raw: string, onAgreed: (name: string) => void): Promise<string | null> {
   const { handle, error } = cleanHandle(raw)
   if (error) return error
   const list = loadTrusted()
   if (list.some((t) => t.handle === handle)) return 'Цю людину вже додано'
   if (list.length >= 3) return 'Не більше трьох людей'
+  if (isLive()) {
+    const r = await addTrustedApi(handle).catch(() => ({ ok: false, error: 'network' }) as { ok: boolean; error?: string; list?: Trusted[] })
+    if (r.ok && r.list) {
+      write(TRUSTED_KEY, r.list)
+      return null
+    }
+    if (r.error === 'not_found') return `Не знайшли @${handle} у Telegram. Перевір нік.`
+    return ERRORS[r.error ?? ''] ?? 'Не вдалося написати людині. Спробуй ще раз.'
+  }
   // Prototype: a nick with "nobody" in it plays "not found"
   if (handle.includes('nobody')) {
     return handle.startsWith('+')
@@ -113,20 +173,48 @@ export function addTrusted(raw: string, onAgreed: (name: string) => void): strin
 }
 
 export function removeTrusted(handle: string) {
+  if (isLive()) removeTrustedApi(handle).catch(() => {})
   write(
     TRUSTED_KEY,
     loadTrusted().filter((t) => t.handle !== handle),
   )
 }
 
-export function startSafety(s: Safety) {
-  write(SAFETY_KEY, s)
+/** Meeting details the trusted people will see */
+export type MeetingInfo = {
+  time: string
+  place: string
+  address?: string
+  lat?: number
+  lon?: number
+  withName?: string
+  withAge?: number
 }
-export function setLive() {
+
+export async function startSafety(s: Safety, m: MeetingInfo): Promise<string | null> {
+  if (isLive()) {
+    const r = await startSafetyApi({ ...m, matchId: s.matchId, guardians: s.guardians, checkAt: s.checkAt, fence: s.fence }).catch(
+      () => ({ ok: false, error: 'network' }),
+    )
+    if (!r.ok) return r.error === 'not_ready' ? ERRORS.not_ready : 'Не вдалося увімкнути. Спробуй ще раз.'
+  }
+  write(SAFETY_KEY, s)
+  return null
+}
+
+/** Last step: share live location with the bot. Real site opens the bot; the demo pretends. */
+export function setLive(): boolean {
+  const link = botStartLink('safe')
+  if (isLive() && link) {
+    window.open(link, '_blank', 'noopener')
+    return false
+  }
   const s = loadSafety()
   if (s) write(SAFETY_KEY, { ...s, live: true })
+  return true
 }
 export function stopSafety() {
+  if (isLive()) stopSafetyApi().catch(() => {})
   write(SAFETY_KEY, null)
 }
 
@@ -139,11 +227,26 @@ export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void 
   const { trusted } = useSafetyStore()
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const add = () => {
-    const err = addTrusted(value, onAgreed)
+  const [busy, setBusy] = useState(false)
+  const add = async () => {
+    if (busy) return
+    setBusy(true)
+    const err = await addTrusted(value, onAgreed)
+    setBusy(false)
     setError(err)
     if (!err) setValue('')
   }
+  // Real site: check for «+» while someone is still deciding
+  const waiting = trusted.filter((t) => t.status === 'wait').map((t) => t.handle).join(',')
+  useEffect(() => {
+    if (!isLive() || !waiting) return
+    const before = new Map(loadTrusted().map((t) => [t.handle, t.status]))
+    const id = window.setInterval(async () => {
+      await syncSafety()
+      for (const t of loadTrusted()) if (before.get(t.handle) === 'wait' && t.status === 'ok') onAgreed(t.name)
+    }, 6000)
+    return () => window.clearInterval(id)
+  }, [waiting]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <p className="dlabel">
@@ -180,8 +283,8 @@ export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void 
             onKeyDown={(e) => e.key === 'Enter' && add()}
             aria-label="Нік або номер у Telegram"
           />
-          <button className="dchip on" onClick={add}>
-            Додати
+          <button className="dchip on" onClick={add} disabled={busy}>
+            {busy ? 'Пишемо…' : 'Додати'}
           </button>
         </div>
       )}
@@ -201,15 +304,19 @@ const plus = (time: string, min: number) => {
 export function SafetySetup({
   matchId,
   time,
+  meeting,
   onDone,
   onProfile,
 }: {
   matchId: string
   /** Meeting time, "19:00" */
   time: string
+  meeting: MeetingInfo
   onDone: (s: Safety) => void
   onProfile: () => void
 }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
   const { trusted } = useSafetyStore()
   const agreed = trusted.filter((t) => t.status === 'ok')
   const [picked, setPicked] = useState<string[]>(agreed.map((t) => t.handle))
@@ -261,12 +368,20 @@ export function SafetySetup({
         </span>
         <span className="dtoggle-knob" aria-hidden="true" />
       </button>
+      {err && <p className="derror">{err}</p>}
       <button
         className="dbtn"
-        disabled={picked.length === 0}
-        onClick={() => onDone({ matchId, guardians: picked, checkAt, until: plus(time, 180), fence, live: false })}
+        disabled={picked.length === 0 || busy}
+        onClick={async () => {
+          const s: Safety = { matchId, guardians: picked, checkAt, until: plus(time, 180), fence, live: false }
+          setBusy(true)
+          const e = await startSafety(s, meeting)
+          setBusy(false)
+          if (e) return setErr(e)
+          onDone(s)
+        }}
       >
-        Увімкнути
+        {busy ? 'Вмикаємо…' : 'Увімкнути'}
       </button>
     </>
   )

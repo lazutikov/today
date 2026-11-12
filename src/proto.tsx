@@ -8,7 +8,7 @@ import { mapsLink, nearestArea, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
 const DetailMap = lazy(() => import('./DetailMap'))
-import { guardianNames, SAFETY_PREVIEW, setLive, startSafety, stopSafety, SafetySetup, TrustedSection, useSafetyStore, type Safety } from './safety'
+import { guardianNames, loadSafety as loadSafetyNow, setLive, stopSafety, syncSafety, SafetySetup, TrustedSection, useSafetyStore, type Safety } from './safety'
 import { CITY, EVENTS, formatAreas, INVITERS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
@@ -326,6 +326,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [matches, setMatches] = useState<Match[]>([])
   const { safety } = useSafetyStore()
+  // Real site: is the feature on, who are my trusted people, did the bot get my location
+  useEffect(() => {
+    syncSafety()
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && loadSafetyNow()) syncSafety()
+    }, 20000)
+    return () => window.clearInterval(id)
+  }, [])
   const [toast, setToast] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile>(loadProfile)
   const timers = useRef<number[]>([])
@@ -1050,9 +1058,17 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           <SafetySetup
             matchId={overlay.match.id}
             time={overlay.match.time}
+            meeting={{
+              time: overlay.match.time,
+              place: overlay.match.place,
+              address: overlay.match.address,
+              lat: overlay.match.lat,
+              lon: overlay.match.lon,
+              withName: overlay.match.with[0]?.name,
+              withAge: overlay.match.with[0]?.age || undefined,
+            }}
             onProfile={() => setOverlay({ t: 'profile' })}
             onDone={(s: Safety) => {
-              startSafety(s)
               track('safety_on', { guardians: s.guardians.length, fence: s.fence, checkAt: s.checkAt })
               setOverlay({ t: 'safety-bot', match: overlay.match })
             }}
@@ -1077,11 +1093,15 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           <button
             className="dbtn"
             onClick={() => {
-              // Prototype: the bot "sees" the live location right away
-              setLive()
+              // Real site: opens the bot; the banner turns green once the location arrives
+              const demo = setLive()
               track('safety_live')
               setOverlay(null)
-              say(`Готово. ${safety ? guardianNames(safety) : 'Довірені люди'} ${safety && safety.guardians.length > 1 ? 'знають' : 'знає'} про зустріч`)
+              say(
+                demo
+                  ? `Готово. ${safety ? guardianNames(safety) : 'Довірені люди'} ${safety && safety.guardians.length > 1 ? 'знають' : 'знає'} про зустріч`
+                  : 'Поділись геопозицією в боті — і все готово',
+              )
             }}
           >
             Відкрити бота
@@ -1533,6 +1553,7 @@ function MatchSheet({
   onTelegram: () => void
 }) {
   const { left, label } = useCountdown(FREE_CANCEL_SECONDS)
+  const { enabled: safetyOn } = useSafetyStore()
   const free = left > 0
   const p = match.with[0]
   return (
@@ -1576,7 +1597,7 @@ function MatchSheet({
       <button className="dbtn" onClick={onTelegram}>
         Написати в Telegram
       </button>
-      {!SAFETY_PREVIEW ? null : !safety ? (
+      {!safetyOn ? null : !safety ? (
         <button className="safety-cta" onClick={onSafety}>
           <span aria-hidden="true">🛡</span>
           <span>
@@ -1691,6 +1712,7 @@ function ProfileSheet({
   onClose: () => void
   onSave: (p: Profile) => void
 }) {
+  const { enabled: safetyOn } = useSafetyStore()
   const [bio, setBio] = useState(profile.bio)
   const [ga, setGa] = useState<Pick<Profile, 'gender' | 'age'>>({
     gender: profile.gender,
@@ -1721,7 +1743,7 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
-      {SAFETY_PREVIEW && <TrustedSection onAgreed={(name) => say(`${name}: «+». Тепер це твоя довірена людина`)} />}
+      {safetyOn && <TrustedSection onAgreed={(name) => say(`${name}: «+». Тепер це твоя довірена людина`)} />}
       <p className="dlabel">
         Мої місця <span className="dopt">до 2, наприклад дім і робота</span>
       </p>

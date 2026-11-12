@@ -1,0 +1,43 @@
+/**
+ * Connect the «today · безпека» account (owner only, once).
+ *  GET    /api/sender                       status
+ *  POST   /api/sender {phone}               Telegram sends a login code to that account
+ *  POST   /api/sender {code, password?}     finish sign-in (password = 2FA, if set)
+ *  DELETE /api/sender                       disconnect
+ */
+import { json, OWNER_USERNAME, readJson, readSession } from './_kv.js'
+import { loginFinish, loginSendCode, logoutSender, senderConfigured, senderReady } from './_sender.js'
+
+const isOwner = (request: Request) => readSession(request)?.username?.toLowerCase() === OWNER_USERNAME
+
+export async function GET(request: Request): Promise<Response> {
+  if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
+  return json({ ok: true, configured: senderConfigured, account: await senderReady() })
+}
+
+export async function POST(request: Request): Promise<Response> {
+  if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
+  if (!senderConfigured) return json({ ok: false, error: 'no_api_id' }, 400)
+  const b = await readJson<{ phone?: string; code?: string; password?: string }>(request)
+  try {
+    if (b?.phone) {
+      const phone = '+' + b.phone.replace(/\D/g, '')
+      if (phone.length < 10) return json({ ok: false, error: 'bad_phone' }, 400)
+      await loginSendCode(phone)
+      return json({ ok: true, step: 'code' })
+    }
+    if (b?.code) {
+      const r = await loginFinish(b.code.replace(/\D/g, ''), b.password || undefined)
+      return json({ ok: r === 'ok', step: r, account: r === 'ok' ? await senderReady() : null })
+    }
+  } catch (e) {
+    return json({ ok: false, error: e instanceof Error ? e.message.slice(0, 120) : 'failed' }, 502)
+  }
+  return json({ ok: false, error: 'bad_request' }, 400)
+}
+
+export async function DELETE(request: Request): Promise<Response> {
+  if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
+  await logoutSender()
+  return json({ ok: true })
+}
