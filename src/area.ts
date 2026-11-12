@@ -35,6 +35,7 @@ export function cityKey(name: string): string {
   const n = name.trim().toLowerCase()
   if (/^(львів|львов|lviv|lwów|lwow|lemberg)$/.test(n)) return 'lviv'
   if (/^(варшава|warszawa|warsaw)$/.test(n)) return 'warsaw'
+  if (/^(харків|харьков|kharkiv|kharkov|charków)$/.test(n)) return 'kharkiv'
   return n.slice(0, 40)
 }
 

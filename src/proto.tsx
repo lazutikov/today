@@ -9,7 +9,7 @@ import { mapsLink, nearestArea, type Place } from './places'
 const PlacePicker = lazy(() => import('./PlacePicker'))
 const DetailMap = lazy(() => import('./DetailMap'))
 import { guardianNames, loadSafety as loadSafetyNow, setLive, stopSafety, syncSafety, SafetySetup, TrustedSection, useSafetyStore, type Safety } from './safety'
-import { CITY, EVENTS, formatAreas, INVITERS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
+import { CITY, EVENTS, formatAreas, INVITERS, KHARKIV_EVENTS, KHARKIV_PEOPLE, KHARKIV_VENUES, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
 import { isSignedIn, loadProfile, saveProfile, setSignedIn, type Profile } from './profile'
@@ -705,14 +705,17 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     track('feed_filter', { radius: f.radius ?? 'any', cats: f.cats.length })
   }
   // Demo cards live in the launch city only; elsewhere the feed is just real people
-  const local = (l: FeedCard[]) => (home ? l : l.filter((c) => c.mine))
+  // Kharkiv has its own demo cards; other cities show only real posts (and mine)
+  const kharkiv = spot.key === 'kharkiv'
+  const local = (l: FeedCard[], kh: FeedCard[]) =>
+    home ? l : kharkiv ? [...l.filter((c) => c.mine), ...kh] : l.filter((c) => c.mine)
   // Plans I'm already in live in the banner on top, not in the feed
   const joined = new Set(matches.filter((m) => !m.cancelled && m.cardId).map((m) => m.cardId))
   const notJoined = (l: FeedCard[]) => l.filter((c) => c.mine || !joined.has(c.id))
   const cards = rankFeed(
     tab === 'people'
-      ? notJoined([...realPosts.filter((c) => c.kind === 'person'), ...local(people)])
-      : notJoined([...realPosts.filter((c) => c.kind === 'event'), ...local(events)]),
+      ? notJoined([...realPosts.filter((c) => c.kind === 'person'), ...local(people, KHARKIV_PEOPLE)])
+      : notJoined([...realPosts.filter((c) => c.kind === 'event'), ...local(events, KHARKIV_EVENTS)]),
     home ? (profile.areas ?? []) : [],
     new Date(),
     from,
@@ -846,7 +849,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <SearchIcon />
         <input
           type="search"
-          placeholder={tab === 'events' ? 'Кава, більярд, Сихів…' : 'Прогулянка, кіно, Центр…'}
+          placeholder={tab === 'events' ? `Кава, більярд, ${home ? 'Сихів' : kharkiv ? 'Салтівка' : 'центр'}…` : 'Прогулянка, кіно, Центр…'}
           aria-label="Пошук у стрічці"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -1420,7 +1423,10 @@ function InviteSheet({
   onClose: () => void
   onSend: (place: string, time: string, geo?: Place) => void
 }) {
-  const suggestions = [...new Set(card.tags.flatMap((t) => VENUES[t] ?? []))].slice(0, 4)
+  const key = getSpot().key
+  // Quick places only where we know the city; elsewhere the map picker
+  const known = key === 'kharkiv' ? KHARKIV_VENUES : isHomeCity({ key }) ? VENUES : {}
+  const suggestions = [...new Set(card.tags.flatMap((t) => known[t] ?? []))].slice(0, 4)
   const slots = slotsFor(card.time)
   const [place, setPlace] = useState<string | null>(null)
   const [geo, setGeo] = useState<Place | null>(null)
