@@ -161,14 +161,14 @@ export async function answerRequest(
 
 /* ---------- Безпечна зустріч ---------- */
 
-export type TrustedRow = { handle: string; name: string; status: 'wait' | 'ok' | 'no' }
+export type TrustedRow = { handle: string; name: string; status: 'wait' | 'ok' | 'no'; label?: string }
 
 export async function fetchTrusted(): Promise<{ ready: boolean; list: TrustedRow[] }> {
   const r = await api<{ ok: boolean; ready?: boolean; list?: TrustedRow[] }>('/api/trusted')
   return { ready: Boolean(r.ready), list: r.list ?? [] }
 }
-export async function addTrustedApi(handle: string): Promise<{ ok: boolean; list?: TrustedRow[]; error?: string }> {
-  return api('/api/trusted', { method: 'POST', body: JSON.stringify({ handle }) })
+export async function addTrustedApi(handle: string, label?: string): Promise<{ ok: boolean; list?: TrustedRow[]; error?: string }> {
+  return api('/api/trusted', { method: 'POST', body: JSON.stringify({ handle, label }) })
 }
 export async function removeTrustedApi(handle: string) {
   await api(`/api/trusted?handle=${encodeURIComponent(handle)}`, { method: 'DELETE' })

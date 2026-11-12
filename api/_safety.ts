@@ -18,6 +18,8 @@ export type Trusted = {
   handle: string
   name: string
   status: 'wait' | 'ok' | 'no'
+  /** How the person who added them calls them: «Мама», «Катя з роботи» */
+  label?: string
   peer?: Peer
   invitedAt: number // seconds
 }
@@ -70,7 +72,7 @@ export async function getTrusted(uid: number): Promise<Trusted[]> {
 async function saveTrusted(uid: number, list: Trusted[]) {
   await kv('SET', `trusted:${uid}`, JSON.stringify(list), 'EX', 365 * 86400)
 }
-export const publicTrusted = (l: Trusted[]) => l.map(({ handle, name, status }) => ({ handle, name, status }))
+export const publicTrusted = (l: Trusted[]) => l.map(({ handle, name, status, label }) => ({ handle, name, status, label }))
 
 const verb = (g: SafetyState['gender'] | undefined, m: string, f: string, n: string) =>
   g === 'Жінка' ? f : g === 'Чоловік' ? m : n
@@ -78,6 +80,7 @@ const verb = (g: SafetyState['gender'] | undefined, m: string, f: string, n: str
 export async function inviteTrusted(
   owner: { id: number; first_name: string; username: string | null; gender?: 'Чоловік' | 'Жінка' },
   rawHandle: unknown,
+  rawLabel?: unknown,
 ): Promise<{ ok: true; list: Trusted[] } | { ok: false; error: string }> {
   const handle = cleanHandle(rawHandle)
   if (!handle) return { ok: false, error: 'bad_handle' }
@@ -98,7 +101,8 @@ export async function inviteTrusted(
     return peer
   })
   if (!result) return { ok: false, error: handle.startsWith('+') ? 'not_found_phone' : 'not_found' }
-  const next = [...list, { handle, name: result.name, status: 'wait' as const, peer: result, invitedAt: Math.floor(Date.now() / 1000) - 5 }]
+  const label = typeof rawLabel === 'string' && rawLabel.trim() ? rawLabel.trim().slice(0, 30) : undefined
+  const next = [...list, { handle, name: result.name, label, status: 'wait' as const, peer: result, invitedAt: Math.floor(Date.now() / 1000) - 5 }]
   await saveTrusted(owner.id, next)
   await phCapture('trusted_invited', String(owner.id), { by: handle.startsWith('+') ? 'phone' : 'nick' })
   return { ok: true, list: next }

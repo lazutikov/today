@@ -2823,3 +2823,4 @@ html:has(.screen) body {
   min-height: calc(3 * 1.4em + 28px);
   font-family: inherit;
 }
+.trusted-label { margin-bottom: 8px; }

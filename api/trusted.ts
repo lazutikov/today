@@ -21,10 +21,10 @@ export async function POST(request: Request): Promise<Response> {
   const user = readSession(request)
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
   if (!(await senderReady())) return json({ ok: false, error: 'not_ready' }, 503)
-  const body = await readJson<{ handle?: string }>(request)
+  const body = await readJson<{ handle?: string; label?: string }>(request)
   const profile = await getProfile(user.id)
   try {
-    const r = await inviteTrusted({ ...user, gender: profile?.gender }, body?.handle)
+    const r = await inviteTrusted({ ...user, gender: profile?.gender }, body?.handle, body?.label)
     return r.ok ? json({ ok: true, list: publicTrusted(r.list) }) : json(r, 400)
   } catch (e) {
     return json({ ok: false, error: e instanceof Error ? e.message : 'send_failed' }, 502)

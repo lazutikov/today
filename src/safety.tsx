@@ -36,7 +36,7 @@ export const SAFETY_PREVIEW = (() => {
   }
 })()
 
-export type Trusted = { handle: string; name: string; status: 'wait' | 'ok' | 'no' }
+export type Trusted = { handle: string; name: string; status: 'wait' | 'ok' | 'no'; label?: string }
 export type Safety = {
   matchId: string
   guardians: string[] // handles
@@ -136,14 +136,14 @@ const ERRORS: Record<string, string> = {
   not_ready: 'Ця функція ще налаштовується. Спробуй трохи пізніше.',
 }
 
-export async function addTrusted(raw: string, onAgreed: (name: string) => void): Promise<string | null> {
+export async function addTrusted(raw: string, onAgreed: (name: string) => void, label?: string): Promise<string | null> {
   const { handle, error } = cleanHandle(raw)
   if (error) return error
   const list = loadTrusted()
   if (list.some((t) => t.handle === handle)) return 'Цю людину вже додано'
   if (list.length >= 3) return 'Не більше трьох людей'
   if (isLive()) {
-    const r = await addTrustedApi(handle).catch(() => ({ ok: false, error: 'network' }) as { ok: boolean; error?: string; list?: Trusted[] })
+    const r = await addTrustedApi(handle, label?.trim() || undefined).catch(() => ({ ok: false, error: 'network' }) as { ok: boolean; error?: string; list?: Trusted[] })
     if (r.ok && r.list) {
       write(TRUSTED_KEY, r.list)
       return null
@@ -158,7 +158,7 @@ export async function addTrusted(raw: string, onAgreed: (name: string) => void):
       : `Не знайшли @${handle} у Telegram. Перевір нік.`
   }
   const name = NAMES[handle] ?? (handle.startsWith('+') ? handle : '@' + handle)
-  write(TRUSTED_KEY, [...list, { handle, name, status: 'wait' }])
+  write(TRUSTED_KEY, [...list, { handle, name, label: label?.trim() || undefined, status: 'wait' }])
   // Prototype: the person answers «+» a few seconds later
   window.setTimeout(() => {
     const now = loadTrusted()
@@ -167,7 +167,7 @@ export async function addTrusted(raw: string, onAgreed: (name: string) => void):
       TRUSTED_KEY,
       now.map((t) => (t.handle === handle ? { ...t, status: 'ok' as const } : t)),
     )
-    onAgreed(name)
+    onAgreed(label?.trim() || name)
   }, 4000)
   return null
 }
@@ -218,23 +218,32 @@ export function stopSafety() {
   write(SAFETY_KEY, null)
 }
 
+const shown = (t: Trusted) => t.label || t.name
+
 export const guardianNames = (s: Safety, list = loadTrusted()) =>
-  s.guardians.map((h) => list.find((t) => t.handle === h)?.name ?? h).join(', ')
+  s.guardians.map((h) => {
+    const t = list.find((x) => x.handle === h)
+    return t ? shown(t) : h
+  }).join(', ')
 
 /* ---------- Profile section ---------- */
 
 export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void }) {
   const { trusted } = useSafetyStore()
   const [value, setValue] = useState('')
+  const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const add = async () => {
     if (busy) return
     setBusy(true)
-    const err = await addTrusted(value, onAgreed)
+    const err = await addTrusted(value, onAgreed, label)
     setBusy(false)
     setError(err)
-    if (!err) setValue('')
+    if (!err) {
+      setValue('')
+      setLabel('')
+    }
   }
   // Real site: check for «+» while someone is still deciding
   const waiting = trusted.filter((t) => t.status === 'wait').map((t) => t.handle).join(',')
@@ -243,7 +252,7 @@ export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void 
     const before = new Map(loadTrusted().map((t) => [t.handle, t.status]))
     const id = window.setInterval(async () => {
       await syncSafety()
-      for (const t of loadTrusted()) if (before.get(t.handle) === 'wait' && t.status === 'ok') onAgreed(t.name)
+      for (const t of loadTrusted()) if (before.get(t.handle) === 'wait' && t.status === 'ok') onAgreed(shown(t))
     }, 6000)
     return () => window.clearInterval(id)
   }, [waiting]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -259,18 +268,27 @@ export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void 
       {trusted.map((t) => (
         <div className="my-place" key={t.handle}>
           <span className="trusted-who">
-            <b>{t.name}</b>
-            {t.name !== '@' + t.handle && <span>{t.handle.startsWith('+') ? t.handle : '@' + t.handle}</span>}
+            <b>{shown(t)}</b>
+            <span>{t.handle.startsWith('+') ? t.handle : '@' + t.handle}</span>
           </span>
           <span className={`tstatus tstatus-${t.status}`}>
             {t.status === 'ok' ? '✓ підтверджено' : t.status === 'no' ? 'відмова' : 'чекаємо «+»'}
           </span>
-          <button className="dlink" onClick={() => removeTrusted(t.handle)} aria-label={`Прибрати ${t.name}`}>
+          <button className="dlink" onClick={() => removeTrusted(t.handle)} aria-label={`Прибрати ${shown(t)}`}>
             ✕
           </button>
         </div>
       ))}
       {trusted.length < 3 && (
+        <>
+        <input
+          className="dinput trusted-label"
+          placeholder="Як підписати, наприклад «Мама»"
+          maxLength={30}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          aria-label="Як підписати людину"
+        />
         <div className="trusted-add">
           <input
             className="dinput"
@@ -287,6 +305,7 @@ export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void 
             {busy ? 'Пишемо…' : 'Додати'}
           </button>
         </div>
+        </>
       )}
       {error && <p className="derror">{error}</p>}
     </>
@@ -330,7 +349,7 @@ export function SafetySetup({
         <p className="dtext">
           Спершу додай довірену людину в профілі. Ми напишемо їй у Telegram, і вона має відповісти «+».
         </p>
-        {trusted.length > 0 && <p className="dhint dhint-left">Чекаємо відповіді від: {trusted.map((t) => t.name).join(', ')}</p>}
+        {trusted.length > 0 && <p className="dhint dhint-left">Чекаємо відповіді від: {trusted.map(shown).join(', ')}</p>}
         <button className="dbtn" onClick={onProfile}>
           Додати в профілі
         </button>
@@ -349,7 +368,7 @@ export function SafetySetup({
             aria-pressed={picked.includes(t.handle)}
             onClick={() => setPicked((p) => (p.includes(t.handle) ? p.filter((x) => x !== t.handle) : [...p, t.handle]))}
           >
-            {t.name}
+            {shown(t)}
           </button>
         ))}
       </div>
