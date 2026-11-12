@@ -2826,3 +2826,22 @@ html:has(.screen) body {
 .trusted-label { margin-bottom: 8px; }
 .trusted-resend { justify-self: start; font-size: 13px; padding: 0; margin-top: 2px; }
 .trusted-send { justify-self: start; margin-top: 8px; padding: 8px 14px; font-size: 14px; }
+
+/* Safety mode */
+.safety-btn { position: relative; }
+.safety-btn.on { background: #141414; color: #3ddc84; }
+.safety-btn-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 0 2px #141414; }
+.safety-row { margin-top: 10px; }
+.safety-row .dtoggle { margin: 0; }
+.dsheet-dark .safety-row .dtoggle { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.dsheet-dark .safety-row .dtoggle-text span { color: rgba(255, 255, 255, 0.7); }
+.safety-row-links { display: flex; gap: 16px; justify-content: flex-end; }
+.safety-row-links .dlink { width: auto; margin: 6px 0 0; }
+.safety-entry {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+  margin: 18px 0 6px; padding: 14px 16px; border: 0; border-radius: 20px; background: #ebebeb;
+  color: inherit; text-align: left; font: inherit;
+}
+.safety-entry > span:first-child { display: grid; gap: 2px; font-size: 13px; color: #6b6b6b; }
+.safety-entry b { font-size: 16px; color: #141414; }
+.safety-entry > span:last-child { font-size: 22px; color: #9a9a9a; }

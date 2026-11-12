@@ -8,7 +8,7 @@ import { mapsLink, nearestArea, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
 const DetailMap = lazy(() => import('./DetailMap'))
-import { guardianNames, loadSafety as loadSafetyNow, setLive, stopSafety, syncSafety, SafetySetup, TrustedSection, useSafetyStore, type Safety } from './safety'
+import { guardianNames, loadPrefs, loadSafety as loadSafetyNow, prefsSummary, savePrefs, SafetySettings, setLive, startForMatch, stopSafety, syncSafety, useSafetyStore, type MeetingInfo, type Safety } from './safety'
 import { CITY, EVENTS, formatAreas, INVITERS, KHARKIV_EVENTS, KHARKIV_PEOPLE, KHARKIV_VENUES, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
@@ -52,6 +52,7 @@ import {
   type Tab,
   TagPill,
   BellIcon,
+  ShieldIcon,
   FilterIcon,
   SearchIcon,
   ClockIcon,
@@ -116,7 +117,7 @@ type Overlay =
   | { t: 'notifs' }
   | { t: 'spot' }
   | { t: 'filters' }
-  | { t: 'safety'; match: Match }
+  | { t: 'safety-settings'; back?: 'profile' }
   | { t: 'safety-bot'; match: Match }
   | null
 
@@ -210,6 +211,19 @@ export default function Proto() {
       }}
     />
   )
+}
+
+/** What trusted people see about a match */
+function matchInfo(m: Match): MeetingInfo {
+  return {
+    time: m.time,
+    place: m.place,
+    address: m.address,
+    lat: m.lat,
+    lon: m.lon,
+    withName: m.with[0]?.name,
+    withAge: m.with[0]?.age || undefined,
+  }
 }
 
 /* Own posts survive reloads and re-login, but only for today (it's a same-day service). */
@@ -325,7 +339,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }, [people, events])
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [matches, setMatches] = useState<Match[]>([])
-  const { safety } = useSafetyStore()
+  const { safety, prefs, trusted, enabled: safetyOn } = useSafetyStore()
   // Real site: is the feature on, who are my trusted people, did the bot get my location
   useEffect(() => {
     syncSafety()
@@ -334,6 +348,19 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
     }, 20000)
     return () => window.clearInterval(id)
   }, [])
+  // Safety mode on: the next match gets the safety net by itself
+  const autoTried = useRef<string | null>(null)
+  useEffect(() => {
+    if (!safetyOn || !prefs.on || safety) return
+    const m = matches.find((x) => !x.cancelled)
+    if (!m || autoTried.current === m.id) return
+    autoTried.current = m.id
+    startForMatch(m.id, matchInfo(m)).then((err) => {
+      if (err) return
+      track('safety_on', { from: 'auto' })
+      say('🛡 Safety mode: довірені люди знають про зустріч. Поділись геопозицією в боті')
+    })
+  }, [safetyOn, prefs.on, safety, matches]) // eslint-disable-line react-hooks/exhaustive-deps
   const [toast, setToast] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile>(loadProfile)
   const timers = useRef<number[]>([])
@@ -758,6 +785,25 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           </button>
         </div>
         <div className="head-actions">
+          {safetyOn && (
+            <button
+              className={prefs.on ? 'profile-btn safety-btn on' : 'profile-btn safety-btn'}
+              aria-label={prefs.on ? 'Safety mode увімкнено. Вимкнути' : 'Safety mode вимкнено. Увімкнути'}
+              aria-pressed={prefs.on}
+              onClick={() => {
+                if (!trusted.some((t) => t.status === 'ok')) {
+                  say('Спершу додай довірену людину')
+                  return setOverlay({ t: 'safety-settings' })
+                }
+                savePrefs({ ...loadPrefs(), on: !prefs.on })
+                track(prefs.on ? 'safety_off' : 'safety_on', { from: 'header' })
+                say(prefs.on ? 'Safety mode вимкнено' : 'Safety mode увімкнено: кожен матч під підстраховкою')
+              }}
+            >
+              <ShieldIcon />
+              {prefs.on && <span className="safety-btn-dot" aria-hidden="true" />}
+            </button>
+          )}
           {live && (
             <button
               className="profile-btn bell-btn"
@@ -1017,7 +1063,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <MatchSheet
           match={overlay.match}
           safety={safety?.matchId === overlay.match.id ? safety : null}
-          onSafety={() => setOverlay({ t: 'safety', match: overlay.match })}
+          onSafety={async () => {
+            const m = overlay.match
+            const err = await startForMatch(m.id, matchInfo(m))
+            if (err) return say(err)
+            track('safety_on', { from: 'match' })
+            setOverlay({ t: 'safety-bot', match: m })
+          }}
+          onSafetySettings={() => setOverlay({ t: 'safety-settings' })}
           onSafetyBot={() => setOverlay({ t: 'safety-bot', match: overlay.match })}
           onSafetyOff={() => {
             stopSafety()
@@ -1056,26 +1109,13 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'posted' && (
         <PostedSheet card={overlay.card} onClose={() => setOverlay(null)} />
       )}
-      {overlay?.t === 'safety' && (
-        <DarkSheet title="Безпечна зустріч" onClose={() => setOverlay({ t: 'match', match: overlay.match })}>
-          <SafetySetup
-            matchId={overlay.match.id}
-            time={overlay.match.time}
-            meeting={{
-              time: overlay.match.time,
-              place: overlay.match.place,
-              address: overlay.match.address,
-              lat: overlay.match.lat,
-              lon: overlay.match.lon,
-              withName: overlay.match.with[0]?.name,
-              withAge: overlay.match.with[0]?.age || undefined,
-            }}
-            onProfile={() => setOverlay({ t: 'profile' })}
-            onDone={(s: Safety) => {
-              track('safety_on', { guardians: s.guardians.length, fence: s.fence, checkAt: s.checkAt })
-              setOverlay({ t: 'safety-bot', match: overlay.match })
-            }}
-          />
+      {overlay?.t === 'safety-settings' && (
+        <DarkSheet
+          title="Safety mode"
+          full
+          onClose={() => setOverlay(overlay.back === 'profile' ? { t: 'profile' } : null)}
+        >
+          <SafetySettings onAgreed={(name) => say(`✓ ${name} тепер твоя довірена людина`)} />
         </DarkSheet>
       )}
       {overlay?.t === 'safety-bot' && (
@@ -1115,7 +1155,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'profile' && (
         <ProfileSheet
           profile={profile}
-          say={say}
+          onSafety={() => setOverlay({ t: 'safety-settings', back: 'profile' })}
           onSignOut={onSignOut}
           onClose={() => setOverlay(null)}
           onSave={(next) => {
@@ -1543,6 +1583,7 @@ function MatchSheet({
   onSafety,
   onSafetyBot,
   onSafetyOff,
+  onSafetySettings,
   onClose,
   onCancel,
   onUncomfortable,
@@ -1553,6 +1594,7 @@ function MatchSheet({
   onSafety: () => void
   onSafetyBot: () => void
   onSafetyOff: () => void
+  onSafetySettings: () => void
   onClose: () => void
   onCancel: (free: boolean) => void
   onUncomfortable: () => void
@@ -1603,32 +1645,36 @@ function MatchSheet({
       <button className="dbtn" onClick={onTelegram}>
         Написати в Telegram
       </button>
-      {!safetyOn ? null : !safety ? (
-        <button className="safety-cta" onClick={onSafety}>
-          <span aria-hidden="true">🛡</span>
-          <span>
-            <b>Безпечна зустріч</b>
-            Довірена людина знатиме, де ти, поки йде зустріч
-          </span>
-        </button>
-      ) : (
-        <div className="safety-on">
-          <span className={safety.live ? 'safety-dot' : 'safety-dot off'} aria-hidden="true" />
-          <span>
-            <b>{safety.live ? 'Підстраховка увімкнена' : 'Залишився один крок'}</b>
-            {safety.live
-              ? `${guardianNames(safety)} знає, де ти, до ${safety.until}. «Все добре?» о ${safety.checkAt}.`
-              : 'Поділись геопозицією з ботом'}
-          </span>
-          {safety.live ? (
-            <button className="dlink" onClick={onSafetyOff}>
-              Вимкнути
+      {safetyOn && (
+        <div className={safety?.live ? 'safety-row on' : 'safety-row'}>
+          <button
+            className={safety ? 'dtoggle on' : 'dtoggle'}
+            role="switch"
+            aria-checked={Boolean(safety)}
+            onClick={safety ? onSafetyOff : onSafety}
+          >
+            <span className="dtoggle-text">
+              <b>🛡 Safety mode</b>
+              <span>
+                {!safety
+                  ? prefsSummary()
+                  : safety.live
+                    ? `${guardianNames(safety)} знає, де ти, до ${safety.until} · «Все добре?» о ${safety.checkAt}`
+                    : 'Залишився крок: поділись геопозицією з ботом'}
+              </span>
+            </span>
+            <span className="dtoggle-knob" aria-hidden="true" />
+          </button>
+          <div className="safety-row-links">
+            {safety && !safety.live && (
+              <button className="dlink" onClick={onSafetyBot}>
+                Поділитися геопозицією
+              </button>
+            )}
+            <button className="dlink" onClick={onSafetySettings}>
+              Налаштування
             </button>
-          ) : (
-            <button className="dlink" onClick={onSafetyBot}>
-              Далі
-            </button>
-          )}
+          </div>
         </div>
       )}
       <button className="dbtn dbtn-ghost" onClick={() => onCancel(free)}>
@@ -1710,15 +1756,15 @@ function ProfileSheet({
   onSignOut,
   onClose,
   onSave,
-  say,
+  onSafety,
 }: {
   profile: Profile
-  say: (text: string) => void
+  onSafety: () => void
   onSignOut: () => void
   onClose: () => void
   onSave: (p: Profile) => void
 }) {
-  const { enabled: safetyOn } = useSafetyStore()
+  const { enabled: safetyOn, prefs, trusted } = useSafetyStore()
   // The feature may have been switched on after the page loaded
   useEffect(() => {
     syncSafety()
@@ -1733,7 +1779,7 @@ function ProfileSheet({
   const [notify, setNotify] = useState(profile.notify !== false)
   const [error, setError] = useState<string | null>(null)
   return (
-    <DarkSheet title="Профіль" onClose={onClose}>
+    <DarkSheet title="Профіль" full onClose={onClose}>
       <p className="dtext dsmall">
         Це бачать усі на твоїх постах. Ім’я та фото з Telegram відкриваються тільки після матчу.
       </p>
@@ -1753,7 +1799,15 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
-      {safetyOn && <TrustedSection onAgreed={(name) => say(`✓ ${name} тепер твоя довірена людина`)} />}
+      {safetyOn && (
+        <button className="safety-entry" onClick={onSafety}>
+          <span>
+            <b>🛡 Safety mode · {prefs.on ? 'увімкнено' : 'вимкнено'}</b>
+            <span>{prefsSummary(prefs, trusted)}</span>
+          </span>
+          <span aria-hidden="true">›</span>
+        </button>
+      )}
       <p className="dlabel">
         Мої місця <span className="dopt">до 2, наприклад дім і робота</span>
       </p>

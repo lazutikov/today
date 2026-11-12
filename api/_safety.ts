@@ -45,6 +45,9 @@ export type SafetyState = {
   checkAt: number // ms
   until: number // ms
   fence: boolean
+  /** Safety mode settings: how far is "away", how long to wait for an answer */
+  fenceKm?: number
+  answerMin?: number
   live: boolean
   last?: { lat: number; lon: number; at: number }
   outsideSince?: number
@@ -248,7 +251,9 @@ export async function startSafety(
     venue: Number.isFinite(lat) && Number.isFinite(lon) && lat !== 0 ? { lat, lon } : undefined,
     checkAt: kyivTime(checkAt),
     until: kyivTime(time) + 3 * 3600_000,
-    fence: b.fence !== false,
+    fence: b.fence !== false && Number(b.fenceKm ?? 1) > 0,
+    fenceKm: [0.5, 1, 2].includes(Number(b.fenceKm)) ? Number(b.fenceKm) : 1,
+    answerMin: [5, 10, 15].includes(Number(b.answerMin)) ? Number(b.answerMin) : undefined,
     live: false,
     startedAt: Date.now(),
   }
@@ -262,6 +267,8 @@ export async function startSafety(
   await phCapture('safety_started', String(user.id), { guardians: guardians.length, fence: s.fence })
   return { ok: true, safety: s }
 }
+
+const fenceText = (s: SafetyState) => ((s.fenceKm ?? 1) < 1 ? `${(s.fenceKm ?? 1) * 1000} м` : `${s.fenceKm ?? 1} км`)
 
 const hhmm = (ms: number) =>
   new Date(ms).toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit' })
@@ -286,14 +293,14 @@ export async function onLocation(uid: number, lat: number, lon: number) {
   s.last = { lat, lon, at: Date.now() }
   if (s.asked?.kind === 'lost') s.asked = undefined // it's back
   if (s.venue && s.fence) {
-    if (km(s.venue, s.last) > FENCE_KM) s.outsideSince ??= Date.now()
+    if (km(s.venue, s.last) > (s.fenceKm ?? FENCE_KM)) s.outsideSince ??= Date.now()
     else s.outsideSince = undefined
   }
   await saveSafety(s)
   if (firstFix) {
     await tg('sendMessage', {
       chat_id: uid,
-      text: `✓ Бачу тебе. О ${hhmm(s.checkAt)} спитаю, чи все добре.${s.fence && s.venue ? ' Підеш далі 1 км від місця зустрічі — теж спитаю.' : ''}\n\nУ небезпеці — дзвони 112.`,
+      text: `✓ Бачу тебе. О ${hhmm(s.checkAt)} спитаю, чи все добре.${s.fence && s.venue ? ` Підеш далі ${fenceText(s)} від місця зустрічі — теж спитаю.` : ''}\n\nУ небезпеці — дзвони 112.`,
     })
   }
   await tick(s)
@@ -316,12 +323,13 @@ async function ask(s: SafetyState, kind: 'check' | 'fence' | 'lost') {
         ? [[{ text: 'Все добре', callback_data: 'sf:ok' }], [{ text: 'Спитай ще через годину', callback_data: 'sf:more' }]]
         : [[{ text: 'Все добре', callback_data: 'sf:ok' }]]
   const r = await tg('sendMessage', { chat_id: s.uid, text: QUESTIONS[kind], reply_markup: { inline_keyboard: buttons } })
-  s.asked = { kind, at: Date.now(), deadline: Date.now() + ANSWER[kind], msgId: (r.result as { message_id?: number })?.message_id }
+  const wait = s.answerMin && kind !== 'lost' ? s.answerMin * MIN : ANSWER[kind]
+  s.asked = { kind, at: Date.now(), deadline: Date.now() + wait, msgId: (r.result as { message_id?: number })?.message_id }
 }
 
 const REASON = {
   check: (s: SafetyState) => `не ${verb(s.gender, 'відповів', 'відповіла', 'відповіла(в)')} на «Все добре?» о ${hhmm(s.checkAt)}`,
-  fence: (s: SafetyState) => `${verb(s.gender, 'пішов', 'пішла', 'пішла(в)')} далі 1 км від місця зустрічі і не відповідає`,
+  fence: (s: SafetyState) => `${verb(s.gender, 'пішов', 'пішла', 'пішла(в)')} далі ${fenceText(s)} від місця зустрічі і не відповідає`,
   lost: (s: SafetyState) =>
     `зник${verb(s.gender, '', 'ла', '(ла)')} зі зв’язку${s.last ? ` о ${hhmm(s.last.at)}` : ''} і не відповідає`,
 }

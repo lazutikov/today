@@ -72,6 +72,36 @@ function write(key: string, v: unknown) {
 }
 
 export const loadTrusted = () => read<Trusted[]>(TRUSTED_KEY, [])
+
+/* ---------- Safety mode settings ---------- */
+
+export type SafetyPrefs = {
+  /** On: every match gets the safety net automatically */
+  on: boolean
+  /** Ask «Все добре?» this many minutes after the meeting starts */
+  checkAfter: number
+  /** "Away" distance from the venue, km; 0 = don't watch */
+  fenceKm: number
+  /** Minutes to wait for an answer before writing to trusted people */
+  answerMin: number
+}
+const PREFS_KEY = 'today.safetyPrefs'
+const DEFAULT_PREFS: SafetyPrefs = { on: false, checkAfter: 120, fenceKm: 1, answerMin: 10 }
+export const loadPrefs = (): SafetyPrefs => ({ ...DEFAULT_PREFS, ...read<Partial<SafetyPrefs>>(PREFS_KEY, {}) })
+export const savePrefs = (p: SafetyPrefs) => write(PREFS_KEY, p)
+
+const hoursText = (min: number) => (min % 60 ? `${Math.floor(min / 60)},5 год` : `${min / 60} год`)
+export const fenceText = (km: number) => (km === 0 ? 'без зони' : km < 1 ? `${km * 1000} м` : `${km} км`)
+
+/** «Мама, Катя · «Все добре?» через 2 год · зона 1 км» */
+export function prefsSummary(p = loadPrefs(), list = loadTrusted()) {
+  const who = list.filter((t) => t.status === 'ok').map((t) => t.label || t.name)
+  return [
+    who.length ? who.join(', ') : 'немає довірених людей',
+    `«Все добре?» через ${hoursText(p.checkAfter)}`,
+    p.fenceKm ? `зона ${fenceText(p.fenceKm)}` : 'без зони',
+  ].join(' · ')
+}
 export const loadSafety = () => read<Safety | null>(SAFETY_KEY, null)
 
 /** The server has the «today · безпека» account connected: the feature is on for everyone */
@@ -115,7 +145,7 @@ export function useSafetyStore() {
       listeners.delete(f)
     }
   }, [])
-  return { trusted: loadTrusted(), safety: loadSafety(), enabled: SAFETY_PREVIEW || serverReady }
+  return { trusted: loadTrusted(), safety: loadSafety(), prefs: loadPrefs(), enabled: SAFETY_PREVIEW || serverReady }
 }
 
 /** @katya_lviv → katya_lviv; +380… stays a phone */
@@ -197,9 +227,25 @@ export type MeetingInfo = {
   withAge?: number
 }
 
-export async function startSafety(s: Safety, m: MeetingInfo): Promise<string | null> {
+/** Turn the safety net on for one match with the Safety mode settings */
+export async function startForMatch(matchId: string, m: MeetingInfo): Promise<string | null> {
+  const p = loadPrefs()
+  const guardians = loadTrusted().filter((t) => t.status === 'ok').map((t) => t.handle)
+  if (!guardians.length) return 'Спершу додай довірену людину в Safety mode'
+  const s: Safety = {
+    matchId,
+    guardians,
+    checkAt: plus(m.time, p.checkAfter),
+    until: plus(m.time, 180),
+    fence: p.fenceKm > 0,
+    live: false,
+  }
+  return startSafety(s, m, p)
+}
+
+export async function startSafety(s: Safety, m: MeetingInfo, p = loadPrefs()): Promise<string | null> {
   if (isLive()) {
-    const r = await startSafetyApi({ ...m, matchId: s.matchId, guardians: s.guardians, checkAt: s.checkAt, fence: s.fence }).catch(
+    const r = await startSafetyApi({ ...m, matchId: s.matchId, guardians: s.guardians, checkAt: s.checkAt, fence: s.fence, fenceKm: p.fenceKm, answerMin: p.answerMin }).catch(
       () => ({ ok: false, error: 'network' }),
     )
     if (!r.ok) return r.error === 'not_ready' ? ERRORS.not_ready : 'Не вдалося увімкнути. Спробуй ще раз.'
@@ -313,8 +359,8 @@ export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void 
 
 /* ---------- Meeting: turn it on ---------- */
 
-const plus = (time: string, min: number) => {
-  const [h, m] = time.split(':').map(Number)
+function plus(time: string, min: number) {
+  const [h, m] = (/^\d{1,2}:\d{2}/.test(time) ? time : '19:00').split(':').map(Number)
   const t = h * 60 + m + min
   return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
 }
@@ -401,6 +447,62 @@ export function SafetySetup({
       >
         {busy ? 'Вмикаємо…' : 'Увімкнути'}
       </button>
+    </>
+  )
+}
+
+/* ---------- Safety mode page ---------- */
+
+function Chips<T extends number>({ value, options, label, onChange }: { value: T; options: T[]; label: (v: T) => string; onChange: (v: T) => void }) {
+  return (
+    <div className="dchips" role="radiogroup">
+      {options.map((o) => (
+        <button key={o} role="radio" aria-checked={value === o} className={value === o ? 'dchip on' : 'dchip'} onClick={() => onChange(o)}>
+          {label(o)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function SafetySettings({ onAgreed }: { onAgreed: (name: string) => void }) {
+  const { prefs, trusted } = useSafetyStore()
+  const agreed = trusted.filter((t) => t.status === 'ok').length
+  const set = (patch: Partial<SafetyPrefs>) => savePrefs({ ...prefs, ...patch })
+  return (
+    <>
+      <button
+        className={prefs.on ? 'dtoggle on' : 'dtoggle'}
+        role="switch"
+        aria-checked={prefs.on}
+        disabled={!agreed && !prefs.on}
+        onClick={() => set({ on: !prefs.on })}
+      >
+        <span className="dtoggle-text">
+          <b>Safety mode {prefs.on ? 'увімкнено' : 'вимкнено'}</b>
+          <span>
+            {agreed
+              ? 'Кожен матч автоматично отримує підстраховку: довірені люди знають, де ти, а бот питає «Все добре?».'
+              : 'Спершу додай хоча б одну довірену людину нижче.'}
+          </span>
+        </span>
+        <span className="dtoggle-knob" aria-hidden="true" />
+      </button>
+
+      <TrustedSection onAgreed={onAgreed} />
+
+      <p className="dlabel">Коли спитати «Все добре?»</p>
+      <Chips value={prefs.checkAfter} options={[60, 120, 150]} label={(v) => `через ${hoursText(v)}`} onChange={(v) => set({ checkAfter: v })} />
+      <p className="dhint dhint-left">Від початку зустрічі. Можна відповісти «Спитай ще через годину».</p>
+
+      <p className="dlabel">Якщо я піду далеко від місця</p>
+      <Chips value={prefs.fenceKm} options={[0, 0.5, 1, 2]} label={(v) => (v ? `далі ${fenceText(v)}` : 'Не стежити')} onChange={(v) => set({ fenceKm: v })} />
+
+      <p className="dlabel">Скільки чекати відповідь</p>
+      <Chips value={prefs.answerMin} options={[5, 10, 15]} label={(v) => `${v} хв`} onChange={(v) => set({ answerMin: v })} />
+      <p className="dhint dhint-left">Не відповіси за цей час — бот напише довіреним людям, де ти була востаннє.</p>
+
+      <p className="dhint">У небезпеці — дзвони 112. Safety mode не замінює екстрені служби.</p>
     </>
   )
 }
