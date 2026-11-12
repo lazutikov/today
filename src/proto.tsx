@@ -1571,7 +1571,6 @@ const HOURS = Array.from({ length: 13 }, (_, i) => `${String(i + 11).padStart(2,
   (h) => [h, h.replace(':00', ':30')],
 )
 
-const BIO_EXAMPLES = ['Працюю в IT, люблю каву', 'Нова в місті', 'Студент, граю в настолки']
 
 function ProfileSheet({
   profile,
@@ -1601,22 +1600,15 @@ function ProfileSheet({
       <label className="dlabel" htmlFor="p-bio">
         Про себе
       </label>
-      <input
+      <textarea
         id="p-bio"
-        className="dinput"
+        className="dinput dinput-bio"
+        rows={3}
         maxLength={80}
-        placeholder="Одним рядком: чим займаєшся, що любиш"
+        placeholder="Чим займаєшся, що любиш"
         value={bio}
-        onChange={(e) => setBio(e.target.value)}
+        onChange={(e) => setBio(e.target.value.replace(/\s*\n\s*/g, ' '))}
       />
-      <div className="dchips dchips-gap">
-        {BIO_EXAMPLES.map((ex) => (
-          <button key={ex} className="dchip dchip-small" onClick={() => setBio(ex)}>
-            {ex}
-          </button>
-        ))}
-      </div>
-      <p className="dhint dhint-left">{bio.length}/80, без імені, телефону й посилань</p>
       <p className="dlabel">
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
