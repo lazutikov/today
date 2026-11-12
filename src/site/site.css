@@ -1141,7 +1141,6 @@ html:has(.w) body {
   .w-hero-safe { top: auto; left: auto; right: 32px; bottom: 32px; width: 340px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .w-hero-safe { animation: w-fade 0.9s ease 1.1s both; }
   .w-hero-safe-dot { animation: w-pulse 2.4s ease-in-out 2s infinite; }
 }
 @keyframes w-pulse {
