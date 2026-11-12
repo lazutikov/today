@@ -2008,7 +2008,7 @@ function CreateSheet({
       </div>
 
       <label className="dlabel" htmlFor="c-headline">
-        {kind === 'person' ? 'Що хочеш сьогодні?' : 'Який план?'}
+        {kind === 'person' ? 'Що хочеш сьогодні?' : 'Що за подія?'}
       </label>
       <textarea
         id="c-headline"
