@@ -361,7 +361,8 @@ export function Onboarding({
               onChange={(e) => setBio(e.target.value.replace(/\s*\n\s*/g, ' '))}
             />
             {askGa && (
-              <>
+              <div className="ob-ga-row">
+                <div>
                 <p className="ob-label">Стать</p>
                 <div className="ob-gender" role="radiogroup" aria-label="Стать">
                   {(['Чоловік', 'Жінка'] as const).map((g) => (
@@ -384,6 +385,8 @@ export function Onboarding({
                     Не вказувати
                   </button>
                 </div>
+                </div>
+                <div>
                 <label className="ob-label" htmlFor="o-age">
                   Вік
                 </label>
@@ -392,14 +395,15 @@ export function Onboarding({
                   className="ob-input ob-age"
                   inputMode="numeric"
                   maxLength={2}
-                  placeholder="Наприклад, 27"
+                  placeholder="27"
                   value={ga.age ?? ''}
                   onChange={(e) => {
                     const n = parseInt(e.target.value.replace(/\D/g, ''), 10)
                     setGa({ ...ga, age: Number.isFinite(n) ? n : undefined })
                   }}
                 />
-              </>
+                </div>
+              </div>
             )}
             <div className="ob-preview" aria-label="Так тебе бачитимуть">
               <span className="ob-preview-kicker">Так тебе бачитимуть</span>
