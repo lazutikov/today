@@ -8,5 +8,16 @@
       "path": "/api/checkin",
       "schedule": "0 8 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/sender.ts": {
+      "maxDuration": 60
+    },
+    "api/trusted.ts": {
+      "maxDuration": 30
+    },
+    "api/safety.ts": {
+      "maxDuration": 30
+    }
+  }
 }

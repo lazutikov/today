@@ -75,7 +75,8 @@
   const $ = (id) => document.getElementById(id)
   const call = (method, body) =>
     fetch('/api/sender', { method, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: body ? JSON.stringify(body) : undefined })
-      .then((r) => r.json()).catch(() => ({ ok: false, error: 'network' }))
+      .then(async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: 'HTTP ' + r.status + ' ' + t.slice(0, 80) } } })
+      .catch(() => ({ ok: false, error: 'network' }))
   const err = (t) => { $('err').hidden = !t; $('err').textContent = t || '' }
   const ERR = {
     owner_only: 'Ця сторінка лише для власника today. Увійди на сайті через свій Telegram і відкрий її знову.',
@@ -164,7 +165,9 @@
   async function qrPoll(fresh) {
     if (polling) return
     polling = true
+    const slow = setTimeout(() => { $('qrNote').textContent = 'Підключаємо… це може зайняти до хвилини.' }, 5000)
     const r = await call('POST', { qr: true, fresh: Boolean(fresh) })
+    clearTimeout(slow)
     polling = false
     if (!r.ok) return err(/FLOOD/.test(r.error || '') ? 'Telegram просить зачекати. Спробуй за кілька хвилин.' : 'Помилка: ' + r.error)
     if (r.state === 'show') {
