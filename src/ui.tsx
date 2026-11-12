@@ -163,7 +163,7 @@ export function placeLine(
 
 /** The point is rounded to ~500 m, so don't pretend to know metres */
 function roughDistance(km: number) {
-  return km < 1 ? 'до 1 км' : `~${formatDistance(km)}`
+  return km < 1 ? 'до 1 км від вас' : `~${formatDistance(km)} від вас`
 }
 
 /* ---------- Card (Figma "Frame 20") ---------- */
