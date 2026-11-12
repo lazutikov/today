@@ -239,7 +239,7 @@ export default function Site() {
           </span>
           <span className="w-hero-safe-text">
             <b>Safety mode увімкнено</b>
-            <span>Мама знає, де ти, до 22:00</span>
+            <span>Подруга знає, де ти, до 22:00</span>
           </span>
           <span className="w-hero-safe-dot" aria-hidden="true" />
         </a>
