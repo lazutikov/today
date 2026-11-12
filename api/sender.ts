@@ -27,7 +27,7 @@ export async function POST(request: Request): Promise<Response> {
       return json({ ok: true, step: 'code', sent: await loginSendCode(phone) })
     }
     if (b && 'qr' in b) {
-      const r = await qrStep()
+      const r = await qrStep(Boolean((b as { fresh?: boolean }).fresh))
       if (r.state === 'show') return json({ ok: true, ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, width: 240 }) })
       return json({ ok: true, ...r, account: r.state === 'ok' ? await senderReady() : null })
     }

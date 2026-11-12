@@ -194,11 +194,17 @@ async function saveMe(c: TelegramClient) {
  * a fresh token to show (not scanned yet), 'ok' when accepted on the phone,
  * or 'need_password' when the account has 2FA.
  */
-export async function qrStep(): Promise<{ state: 'show'; url: string; expires: number } | { state: 'ok' } | { state: 'need_password' }> {
+export async function qrStep(fresh = false): Promise<{ state: 'show'; url: string; expires: number } | { state: 'ok' } | { state: 'need_password' }> {
+  if (fresh) await kv('DEL', QR)
   const saved = (await kv('GET', QR)) as string | null
   const c = client(saved ?? '')
   await c.connect()
   try {
+    // Scanned since the last poll: this connection is already signed in
+    if (saved && (await c.checkAuthorization().catch(() => false))) {
+      await saveMe(c)
+      return { state: 'ok' }
+    }
     let r: Api.auth.TypeLoginToken
     try {
       r = await c.invoke(new Api.auth.ExportLoginToken({ apiId: API_ID, apiHash: API_HASH, exceptIds: [] }))

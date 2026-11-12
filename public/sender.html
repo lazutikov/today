@@ -158,18 +158,25 @@
     err(ERR[r.step] || ERR[r.error] || 'Помилка: ' + (r.step || r.error))
   }
 
-  let qrTimer = 0, lastUrl = ''
-  async function qrPoll() {
-    const r = await call('POST', { qr: true })
-    if (!r.ok) { clearInterval(qrTimer); return err(/FLOOD/.test(r.error || '') ? 'Telegram просить зачекати. Спробуй за кілька хвилин.' : 'Помилка: ' + r.error) }
-    if (r.state === 'show' && r.url !== lastUrl) { lastUrl = r.url; $('qr').innerHTML = r.svg }
-    if (r.state === 'need_password') { clearInterval(qrTimer); $('qr').innerHTML = '<p>✓ Відскановано</p>'; $('qrPwdBox').hidden = false; $('qrPwd').focus() }
-    if (r.state === 'ok') { clearInterval(qrTimer); $('qrBox').hidden = true; load() }
+  // One request at a time: each QR belongs to the connection that made it
+  let lastUrl = '', polling = false
+  async function qrPoll(fresh) {
+    if (polling) return
+    polling = true
+    const r = await call('POST', { qr: true, fresh: Boolean(fresh) })
+    polling = false
+    if (!r.ok) return err(/FLOOD/.test(r.error || '') ? 'Telegram просить зачекати. Спробуй за кілька хвилин.' : 'Помилка: ' + r.error)
+    if (r.state === 'show') {
+      if (r.url !== lastUrl) { lastUrl = r.url; $('qr').innerHTML = r.svg }
+      return setTimeout(qrPoll, 2500)
+    }
+    if (r.state === 'need_password') { $('qr').innerHTML = '<p>✓ Відскановано</p>'; $('qrPwdBox').hidden = false; $('qrPwd').focus(); return }
+    if (r.state === 'ok') { $('qrBox').hidden = true; load() }
   }
   $('qrStart').onclick = () => {
     err(''); $('qrStart').hidden = true; $('phoneForm').hidden = true; $('codeForm').hidden = true; $('qrBox').hidden = false
     $('qr').innerHTML = '<p class="muted">Готуємо QR…</p>'
-    qrPoll(); qrTimer = setInterval(qrPoll, 3000)
+    qrPoll(true)
   }
   $('qrPwdBtn').onclick = async (e) => {
     err(''); e.target.disabled = true
