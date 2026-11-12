@@ -13,8 +13,9 @@
  */
 import { useEffect, useState } from 'react'
 
-/** Not public yet: on with ?safety=1 (remembered), off with ?safety=0 */
+/** Not public yet: always on in test builds (no bot), on the real site only with ?safety=1 (remembered) */
 export const SAFETY_PREVIEW = (() => {
+  if (!import.meta.env.VITE_TG_BOT_ID) return true
   try {
     const q = new URLSearchParams(location.search).get('safety')
     if (q === '1') localStorage.setItem('today.safetyPreview', '1')
