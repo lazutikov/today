@@ -1049,53 +1049,51 @@ html:has(.w) body {
   margin-top: 8px;
   padding: 28px 24px;
   border-radius: 28px;
-  background: #e3f5ea;
-  color: #0f2b1b;
+  background: var(--tile);
   display: grid;
   gap: 24px;
 }
-.w-sm .w-text { color: #2f4a3a; }
 .w-sm-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 99px;
-  background: #0f2b1b;
-  color: #3ddc84;
+  background: #3ddc84;
+  color: #000;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
 }
 .w-sm-title {
-  margin: 14px 0 10px;
-  font-size: clamp(24px, 5.5vw, 36px);
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  margin: 18px 0 10px;
+  font-size: clamp(30px, 8vw, 48px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   font-weight: 700;
-  max-width: 20ch;
+  color: var(--ink);
+  max-width: 14ch;
 }
-.w-sm-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
+.w-sm-sub { margin: 0; font-size: 17px; color: var(--soft); }
+.w-sm-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; align-content: start; }
+.w-sm-msg {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: #1f1f1f;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--soft);
 }
-.w-sm-steps li {
-  display: grid;
-  gap: 4px;
-  padding: 18px;
-  border-radius: 20px;
-  background: #fff;
-  font-size: 15px;
-  line-height: 1.45;
-  color: #3d4a43;
-}
-.w-sm-steps b { color: #0f2b1b; font-size: 17px; }
-.w-sm-note { margin: 0; font-size: 14px; line-height: 1.5; color: #3d5a47; }
+.w-sm-msg b { color: var(--ink); font-weight: 700; }
+.w-sm-msg.alarm { background: #3a1410; }
+.w-sm-msg.alarm b { color: #ff8a73; }
+.w-sm-time { flex: none; min-width: 44px; font-size: 13px; font-weight: 700; color: #3ddc84; }
+.w-sm-msg.alarm .w-sm-time { color: #ff8a73; }
+.w-sm-note { margin: 0; font-size: 14px; line-height: 1.5; color: #8a8a8a; }
 @media (min-width: 900px) {
-  .w-sm { padding: 40px; grid-template-columns: 1fr 1.3fr; align-items: start; }
-  .w-sm-steps { grid-template-columns: 1fr 1fr; }
+  .w-sm { padding: 44px; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
   .w-sm-note { grid-column: 1 / -1; }
 }
 

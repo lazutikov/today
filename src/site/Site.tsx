@@ -175,10 +175,9 @@ const SAFETY = [
 ]
 
 const SAFETY_MODE = [
-  { title: 'Довірені люди', text: 'Додай до трьох людей. Вони отримають місце, час і посилання на карту, де ти зараз.' },
-  { title: '«Все добре?»', text: 'У потрібний момент бот спитає, як ти. Одна кнопка — і ніхто не хвилюється.' },
-  { title: 'Далеко від місця — спитаємо', text: 'Відійдеш від місця зустрічі далі, ніж налаштовано? Бот перепитає, чи все гаразд.' },
-  { title: 'Не відповідаєш — напишемо', text: 'Немає відповіді чи зв’язку — довірені люди отримають твою останню геопозицію.' },
+  { time: '18:50', who: 'Каті:', text: 'Соня на зустрічі в Kredens Café з Андрієм. Ось де вона.' },
+  { time: '21:00', who: 'Тобі:', text: 'Все добре? — Так 👍' },
+  { time: 'тиша', who: 'Каті:', text: 'Соня не відповідає. Остання геопозиція — тут.', alarm: true },
 ]
 
 const FAQ = [
@@ -380,28 +379,24 @@ export default function Site() {
           ))}
         </div>
         <div className="w-sm">
-          <div className="w-sm-head">
+          <div className="w-sm-copy">
             <span className="w-sm-badge">
               <ShieldMark /> Safety mode
             </span>
-            <h3 className="w-sm-title">Підстраховка під час самої зустрічі</h3>
-            <p className="w-text">
-              Увімкни один раз — і на кожній зустрічі тебе підстраховують люди, яким ти довіряєш. За 10 хвилин до
-              початку вони дізнаються, де, коли й з ким ти зустрічаєшся.
-            </p>
+            <h3 className="w-sm-title">Подруга знає, де ти, поки ти на зустрічі</h3>
+            <p className="w-sm-sub">Вмикається сам за 10 хвилин до зустрічі.</p>
           </div>
-          <ol className="w-sm-steps">
-            {SAFETY_MODE.map((s) => (
-              <li key={s.title}>
-                <b>{s.title}</b>
-                <span>{s.text}</span>
+          <ol className="w-sm-feed" aria-label="Як це виглядає">
+            {SAFETY_MODE.map((m) => (
+              <li key={m.time} className={m.alarm ? 'w-sm-msg alarm' : 'w-sm-msg'}>
+                <span className="w-sm-time">{m.time}</span>
+                <span className="w-sm-text">
+                  <b>{m.who}</b> {m.text}
+                </span>
               </li>
             ))}
           </ol>
-          <p className="w-sm-note">
-            Геопозицію бачать лише твої довірені люди і лише під час зустрічі. Safety mode не замінює екстрені
-            служби: у небезпеці дзвони 112.
-          </p>
+          <p className="w-sm-note">Геопозицію бачать лише твої довірені люди і лише під час зустрічі. У небезпеці — 112.</p>
         </div>
         <p className="w-promise">Це не дейтинг. Тут обирають не людей, а куди піти сьогодні.</p>
       </section>
