@@ -194,7 +194,7 @@ async function saveMe(c: TelegramClient) {
  * a fresh token to show (not scanned yet), 'ok' when accepted on the phone,
  * or 'need_password' when the account has 2FA.
  */
-export async function qrStep(fresh = false): Promise<{ state: 'show'; url: string; expires: number } | { state: 'ok' } | { state: 'need_password' }> {
+export async function qrStep(fresh = false): Promise<{ state: 'show'; url: string; expires: number; debug?: string } | { state: 'ok' } | { state: 'need_password' }> {
   if (fresh) await kv('DEL', QR)
   const saved = (await kv('GET', QR)) as string | null
   const c = client(saved ?? '')
@@ -234,8 +234,10 @@ export async function qrStep(fresh = false): Promise<{ state: 'show'; url: strin
       return { state: 'ok' }
     }
     const t = r as Api.auth.LoginToken
-    await kv('SET', QR, c.session.save() as unknown as string, 'EX', 600)
-    return { state: 'show', url: `tg://login?token=${Buffer.from(t.token).toString('base64url')}`, expires: t.expires * 1000 }
+    const saved2 = c.session.save() as unknown as string
+    await kv('SET', QR, saved2, 'EX', 600)
+    const debug = `dc ${c.session.dcId} · ${saved ? 'same' : 'new'} · key ${saved2.slice(-6)} · ${(r as { className?: string }).className}`
+    return { state: 'show', url: `tg://login?token=${Buffer.from(t.token).toString('base64url')}`, expires: t.expires * 1000, debug }
   } finally {
     await c.disconnect().catch(() => {})
     await c.destroy().catch(() => {})

@@ -38,6 +38,7 @@
     <div id="qrBox" hidden>
       <p><b>Скануй QR у Telegram на телефоні:</b> Налаштування → Пристрої → «Під’єднати пристрій» (Link Desktop Device).</p>
       <div id="qr" style="display:grid;place-items:center;padding:12px;background:#fff;border-radius:16px;min-height:264px"></div>
+      <p class="muted" id="qrDebug" style="font-size:11px;font-family:monospace"></p>
       <p class="muted" id="qrNote">QR оновлюється сам. Після сканування сторінка підключиться за кілька секунд.</p>
       <div id="qrPwdBox" hidden>
         <label for="qrPwd">Пароль двоетапної перевірки</label>
@@ -168,6 +169,7 @@
     if (!r.ok) return err(/FLOOD/.test(r.error || '') ? 'Telegram просить зачекати. Спробуй за кілька хвилин.' : 'Помилка: ' + r.error)
     if (r.state === 'show') {
       if (r.url !== lastUrl) { lastUrl = r.url; $('qr').innerHTML = r.svg }
+      $('qrDebug').textContent = (r.debug || '') + ' · ' + new Date().toLocaleTimeString()
       return setTimeout(qrPoll, 2500)
     }
     if (r.state === 'need_password') { $('qr').innerHTML = '<p>✓ Відскановано</p>'; $('qrPwdBox').hidden = false; $('qrPwd').focus(); return }
