@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CITY, CITY_NAME, TAGS } from './feed'
+import { CITY, CITY_NAME, TAG_COLORS, TAGS } from './feed'
 import selfie from './site/img/selfie.jpg'
 import type { Profile } from './profile'
 import {
@@ -424,7 +424,8 @@ export function Onboarding({
               {TAGS.map((t) => (
                 <button
                   key={t}
-                  className={interests.includes(t) ? 'ob-chip on' : 'ob-chip'}
+                  className={interests.includes(t) ? 'ob-chip ob-chip-tag on' : 'ob-chip'}
+                  style={interests.includes(t) ? { background: TAG_COLORS[t]?.bg, color: TAG_COLORS[t]?.fg } : undefined}
                   aria-pressed={interests.includes(t)}
                   onClick={() => setInterests(toggle(interests, t))}
                 >
