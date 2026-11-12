@@ -10,7 +10,6 @@
 import { json, readJson, readSession } from './_kv.js'
 import { getProfile } from './_profile.js'
 import { getSafety, publicView, startSafety, stopSafety, tick, tickAll } from './_safety.js'
-import { senderReady } from './_sender.js'
 
 function mine(s: Awaited<ReturnType<typeof getSafety>>) {
   if (!s) return null
@@ -39,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!user) return json({ ok: false, error: 'no_session' }, 401)
   const s = await getSafety(user.id)
   if (s) await tick(s).catch(() => {})
-  return json({ ok: true, ready: Boolean(await senderReady()), safety: mine(await getSafety(user.id)) })
+  return json({ ok: true, ready: Boolean(process.env.TELEGRAM_BOT_TOKEN), safety: mine(await getSafety(user.id)) })
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -51,7 +50,6 @@ export async function POST(request: Request): Promise<Response> {
     return json({ ok: true })
   }
   if (body?.action !== 'start') return json({ ok: false, error: 'bad_action' }, 400)
-  if (!(await senderReady())) return json({ ok: false, error: 'not_ready' }, 503)
   const profile = await getProfile(user.id)
   const r = await startSafety(user, profile?.gender, body)
   return r.ok ? json({ ok: true, safety: mine(r.safety) }) : json(r, 400)

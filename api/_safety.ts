@@ -1,26 +1,31 @@
 /**
  * Безпечна зустріч on the server.
  *
- * trusted:{uid}   people who said «+», written to by the «today · безпека» account
+ * trusted:{uid}   people invited by a link to the bot (t.me/<bot>?start=tr_<id>) who pressed «Так».
+ *                 The bot writes to them: they started it, so it may.
+ * tinv:{id}       → owner uid, for the invite link
+ * gidx:{chatId}   → "uid:id" entries, so a trusted person can say /stop
  * safety:{uid}    the safety net for one meeting: who knows, when to ask, the venue,
  *                 the last position from the bot's live location
  * safetok:{token} → uid, for the trusted person's page /safe?t=…
  * safety:active   set of uids to tick
  *
  * Every alarm asks the person first («Все добре?» in the bot) and only then
- * writes to the trusted people. Nothing is sent before they agreed with «+».
+ * writes to the trusted people. Nothing is sent before they agreed.
  */
 import { randomBytes } from 'node:crypto'
 import { esc, json, km, kv, phCapture, tg } from './_kv.js'
-import { findPerson, repliesSince, sendText, withSender, type Peer } from './_sender.js'
 
 export type Trusted = {
+  /** Invite id, also the key in the client */
   handle: string
-  name: string
+  /** How the owner calls them: «Мама» */
+  label: string
   status: 'wait' | 'ok' | 'no'
-  /** How the person who added them calls them: «Мама», «Катя з роботи» */
-  label?: string
-  peer?: Peer
+  /** Filled when they open the invite and agree */
+  chatId?: number
+  name?: string
+  username?: string
   invitedAt: number // seconds
 }
 
@@ -30,7 +35,7 @@ export type SafetyState = {
   gender?: 'Чоловік' | 'Жінка'
   token: string
   matchId: string
-  guardians: string[] // handles
+  guardians: string[] // invite ids
   time: string // meeting time "19:00"
   place: string
   address?: string
@@ -56,12 +61,8 @@ const ANSWER = { check: 10 * MIN, fence: 5 * MIN, lost: 10 * MIN }
 const SILENCE = 30 * MIN // no position for this long → ask
 const FENCE_KM = 1
 
-export const cleanHandle = (raw: unknown): string | null => {
-  if (typeof raw !== 'string') return null
-  const s = raw.trim().replace(/^https?:\/\/t\.me\//, '').replace(/^@/, '')
-  if (/^\+?\d[\d\s-]{8,}$/.test(s)) return '+' + s.replace(/\D/g, '')
-  return /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(s) ? s.toLowerCase() : null
-}
+export const cleanId = (raw: unknown): string | null =>
+  typeof raw === 'string' && /^[A-Za-z0-9_-]{6,24}$/.test(raw) ? raw : null
 
 /* ---------- trusted people ---------- */
 
@@ -72,78 +73,112 @@ export async function getTrusted(uid: number): Promise<Trusted[]> {
 async function saveTrusted(uid: number, list: Trusted[]) {
   await kv('SET', `trusted:${uid}`, JSON.stringify(list), 'EX', 365 * 86400)
 }
-export const publicTrusted = (l: Trusted[]) => l.map(({ handle, name, status, label }) => ({ handle, name, status, label }))
+
+let botName: string | null = process.env.TELEGRAM_BOT_NAME || process.env.VITE_TG_BOT_NAME || null
+async function getBotName() {
+  if (botName) return botName
+  const r = await tg('getMe', {})
+  botName = (r.result as { username?: string } | undefined)?.username ?? null
+  return botName
+}
+export const inviteLink = async (id: string) => `https://t.me/${await getBotName()}?start=tr_${id}`
+
+export async function publicTrusted(l: Trusted[]) {
+  return Promise.all(
+    l.map(async (t) => ({
+      handle: t.handle,
+      label: t.label,
+      name: t.status === 'ok' ? [t.name, t.username ? '@' + t.username : ''].filter(Boolean).join(' · ') : '',
+      status: t.status,
+      link: t.status === 'wait' ? await inviteLink(t.handle) : undefined,
+    })),
+  )
+}
 
 const verb = (g: SafetyState['gender'] | undefined, m: string, f: string, n: string) =>
   g === 'Жінка' ? f : g === 'Чоловік' ? m : n
 
+/** A new invite: the owner shares the link, the person opens it in Telegram */
 export async function inviteTrusted(
-  owner: { id: number; first_name: string; username: string | null; gender?: 'Чоловік' | 'Жінка' },
-  rawHandle: unknown,
-  rawLabel?: unknown,
-): Promise<{ ok: true; list: Trusted[] } | { ok: false; error: string }> {
-  const handle = cleanHandle(rawHandle)
-  if (!handle) return { ok: false, error: 'bad_handle' }
-  const list = await getTrusted(owner.id)
-  if (list.some((t) => t.handle === handle)) return { ok: false, error: 'exists' }
-  if (list.length >= 3) return { ok: false, error: 'too_many' }
-
-  const who = `${esc(owner.first_name)}${owner.username ? ` (@${esc(owner.username)})` : ''}`
-  const added = verb(owner.gender, 'додав', 'додала', 'додав(ла)')
-  const result = await withSender(async (c) => {
-    const peer = await findPerson(c, handle)
-    if (!peer) return null
-    await sendText(
-      c,
-      peer,
-      `Привіт! Це today — сервіс зустрічей на сьогодні.\n\n<b>${who} ${added} вас як довірену людину.</b> Якщо під час зустрічі ${esc(owner.first_name)} не відповідатиме або зникне зі зв’язку, ми напишемо вам тут, де ${verb(owner.gender, 'він був', 'вона була', 'людина була')} востаннє.\n\nЗгодні? Відповідайте <b>+</b>. Відмовитися можна будь-коли словом «стоп».`,
-    )
-    return peer
-  })
-  if (!result) return { ok: false, error: handle.startsWith('+') ? 'not_found_phone' : 'not_found' }
-  const label = typeof rawLabel === 'string' && rawLabel.trim() ? rawLabel.trim().slice(0, 30) : undefined
-  const next = [...list, { handle, name: result.name, label, status: 'wait' as const, peer: result, invitedAt: Math.floor(Date.now() / 1000) - 5 }]
-  await saveTrusted(owner.id, next)
-  await phCapture('trusted_invited', String(owner.id), { by: handle.startsWith('+') ? 'phone' : 'nick' })
-  return { ok: true, list: next }
+  ownerId: number,
+  rawLabel: unknown,
+): Promise<{ ok: true; list: Trusted[]; id: string } | { ok: false; error: string }> {
+  const label = typeof rawLabel === 'string' ? rawLabel.trim().slice(0, 30) : ''
+  if (!label) return { ok: false, error: 'no_label' }
+  const list = await getTrusted(ownerId)
+  if (list.filter((t) => t.status !== 'no').length >= 3) return { ok: false, error: 'too_many' }
+  const id = randomBytes(9).toString('base64url')
+  const next = [...list, { handle: id, label, status: 'wait' as const, invitedAt: Math.floor(Date.now() / 1000) }]
+  await saveTrusted(ownerId, next)
+  await kv('SET', `tinv:${id}`, String(ownerId), 'EX', 30 * 86400)
+  await phCapture('trusted_invited', String(ownerId), {})
+  return { ok: true, list: next, id }
 }
 
-const YES = /^\s*(\+|так|згод|ок|ok|yes|да)/i
-const NO = /^\s*(стоп|stop|ні|нет|no)\b/i
-
-/** Look for «+» or «стоп» from people we're waiting on (called while the profile is open) */
-export async function refreshTrusted(uid: number): Promise<Trusted[]> {
+export async function removeTrusted(uid: number, id: string) {
   const list = await getTrusted(uid)
-  const waiting = list.filter((t) => t.status === 'wait' && t.peer)
-  if (waiting.length === 0) return list
-  let changed = false
-  await withSender(async (c) => {
-    for (const t of waiting) {
-      const replies = await repliesSince(c, t.peer!, t.invitedAt).catch(() => [])
-      if (replies.some((r) => NO.test(r))) {
-        t.status = 'no'
-        changed = true
-        await sendText(c, t.peer!, 'Зрозуміли, більше не писатимемо.').catch(() => {})
-      } else if (replies.some((r) => YES.test(r))) {
-        t.status = 'ok'
-        changed = true
-        await sendText(
-          c,
-          t.peer!,
-          'Дякуємо! Тепер ви довірена людина. Напишемо, лише коли буде зустріч з підстраховкою або якщо щось трапиться.',
-        ).catch(() => {})
-      }
-    }
-  }).catch(() => {})
-  if (changed) await saveTrusted(uid, list)
-  return list
-}
-
-export async function removeTrusted(uid: number, handle: string) {
+  const t = list.find((x) => x.handle === id)
   await saveTrusted(
     uid,
-    (await getTrusted(uid)).filter((t) => t.handle !== handle),
+    list.filter((x) => x.handle !== id),
   )
+  await kv('DEL', `tinv:${id}`)
+  if (t?.chatId) await kv('SREM', `gidx:${t.chatId}`, `${uid}:${id}`)
+}
+
+/** /start tr_<id> in the bot: who invites, and whether it's still open */
+export async function openInvite(id: string, from: { id: number }) {
+  const owner = Number((await kv('GET', `tinv:${id}`)) as string | null)
+  if (!owner) return null
+  if (owner === from.id) return { self: true as const }
+  const t = (await getTrusted(owner)).find((x) => x.handle === id)
+  if (!t) return null
+  const p = (await kv('GET', `profile:${owner}`)) as string | null
+  const gender = p ? (JSON.parse(p) as { gender?: SafetyState['gender'] }).gender : undefined
+  const ownerName = ((await kv('GET', `uname:${owner}`)) as string | null) ?? 'Твій знайомий'
+  return { self: false as const, owner, ownerName, gender, status: t.status }
+}
+
+/** «Так» / «Ні» on the invite */
+export async function answerInvite(id: string, from: { id: number; first_name?: string; username?: string }, yes: boolean) {
+  const owner = Number((await kv('GET', `tinv:${id}`)) as string | null)
+  if (!owner || owner === from.id) return null
+  const list = await getTrusted(owner)
+  const t = list.find((x) => x.handle === id)
+  if (!t) return null
+  t.status = yes ? 'ok' : 'no'
+  if (yes) {
+    t.chatId = from.id
+    t.name = from.first_name
+    t.username = from.username
+    await kv('SADD', `gidx:${from.id}`, `${owner}:${id}`)
+  }
+  await saveTrusted(owner, list)
+  const who = [from.first_name, from.username ? '@' + from.username : ''].filter(Boolean).join(' ')
+  await tg('sendMessage', {
+    chat_id: owner,
+    text: yes
+      ? `🛡 ${t.label} (${who}) тепер твоя довірена людина. Увімкни підстраховку в матчі — і вона знатиме, де ти.`
+      : `${t.label} (${who}) не змогли бути довіреною людиною. Можна запросити когось іншого в профілі.`,
+  })
+  await phCapture('trusted_answered', String(owner), { yes })
+  return { label: t.label }
+}
+
+/** /stop from a trusted person: stop being trusted for everyone */
+export async function stopBeingTrusted(chatId: number) {
+  const entries = ((await kv('SMEMBERS', `gidx:${chatId}`)) as string[]) ?? []
+  for (const e of entries) {
+    const [uid, id] = e.split(':')
+    const list = await getTrusted(Number(uid))
+    const t = list.find((x) => x.handle === id)
+    if (!t) continue
+    t.status = 'no'
+    await saveTrusted(Number(uid), list)
+    await tg('sendMessage', { chat_id: Number(uid), text: `${t.label} більше не довірена людина. Можна запросити когось іншого в профілі.` })
+  }
+  await kv('DEL', `gidx:${chatId}`)
+  return entries.length
 }
 
 /* ---------- safety net ---------- */
@@ -173,16 +208,12 @@ function kyivTime(hhmm: string): number {
 }
 
 async function toGuardians(s: SafetyState, html: string) {
-  const list = (await getTrusted(s.uid)).filter((t) => s.guardians.includes(t.handle) && t.status === 'ok' && t.peer)
-  if (!list.length) return 0
+  const list = (await getTrusted(s.uid)).filter((t) => s.guardians.includes(t.handle) && t.status === 'ok' && t.chatId)
   let sent = 0
-  await withSender(async (c) => {
-    for (const t of list) {
-      await sendText(c, t.peer!, html)
-        .then(() => sent++)
-        .catch(() => {})
-    }
-  }).catch(() => {})
+  for (const t of list) {
+    const r = await tg('sendMessage', { chat_id: t.chatId, text: html, parse_mode: 'HTML', link_preview_options: { is_disabled: true } })
+    if (r.ok) sent++
+  }
   return sent
 }
 
@@ -193,8 +224,8 @@ export async function startSafety(
 ): Promise<{ ok: true; safety: SafetyState } | { ok: false; error: string }> {
   const trusted = await getTrusted(user.id)
   const guardians = (Array.isArray(b.guardians) ? b.guardians : [])
-    .map(cleanHandle)
-    .filter((h): h is string => Boolean(h) && trusted.some((t) => t.handle === h && t.status === 'ok'))
+    .map(cleanId)
+    .filter((h): h is string => Boolean(h) && trusted.some((t) => t.handle === h && t.status === 'ok' && t.chatId))
   if (!guardians.length) return { ok: false, error: 'no_guardians' }
   const time = typeof b.time === 'string' && /^\d{1,2}:\d{2}$/.test(b.time) ? b.time : '19:00'
   const checkAt = typeof b.checkAt === 'string' && /^\d{1,2}:\d{2}$/.test(b.checkAt) ? b.checkAt : time

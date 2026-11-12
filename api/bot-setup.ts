@@ -36,7 +36,8 @@ export async function GET(request: Request): Promise<Response> {
     call('setMyCommands', {
       commands: [
         { command: 'start', description: 'Відкрити today' },
-        { command: 'delete', description: 'Видалити мої дані' },
+        { command: 'stop', description: 'Більше не бути довіреною людиною' },
+      { command: 'delete', description: 'Видалити мої дані' },
       ],
     }),
     call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Відкрити', web_app: { url: `${site}/app` } } }),

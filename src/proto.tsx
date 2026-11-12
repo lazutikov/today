@@ -1753,7 +1753,7 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
-      {safetyOn && <TrustedSection onAgreed={(name) => say(`${name}: «+». Тепер це твоя довірена людина`)} />}
+      {safetyOn && <TrustedSection onAgreed={(name) => say(`✓ ${name} тепер твоя довірена людина`)} />}
       <p className="dlabel">
         Мої місця <span className="dopt">до 2, наприклад дім і робота</span>
       </p>

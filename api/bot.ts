@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto'
 import { CODE_RE, CODE_TTL, json, kv, kvReady, ownerId, OWNER_USERNAME, phCapture, tg } from './_kv.js'
 import { answerReq, deleteUser, saveOutcome, type Outcome } from './_social.js'
 import { setNotify } from './_profile.js'
-import { getSafety, onAnswer, onLocation } from './_safety.js'
+import { answerInvite, getSafety, onAnswer, onLocation, openInvite, stopBeingTrusted } from './_safety.js'
 
 export function webhookSecret(token: string) {
   return createHash('sha256').update(`today-webhook:${token}`).digest('hex').slice(0, 48)
@@ -59,6 +59,23 @@ export async function POST(request: Request): Promise<Response> {
     return json({ ok: true })
   }
   if (update.edited_message) return json({ ok: true })
+
+  // Довірені люди: «Так» / «Ні» on an invite
+  if (cb?.data?.startsWith('tr:')) {
+    const [, id, a] = cb.data.split(':')
+    const r = await answerInvite(id, cb.from as { id: number; first_name?: string; username?: string }, a === 'y')
+    await tg('answerCallbackQuery', { callback_query_id: cb.id, text: r ? (a === 'y' ? 'Дякуємо!' : 'Зрозуміли') : 'Запрошення вже не діє' })
+    if (cb.message && r)
+      await tg('editMessageText', {
+        chat_id: cb.message.chat.id,
+        message_id: cb.message.message_id,
+        text:
+          a === 'y'
+            ? '✓ Ви довірена людина. Ми напишемо лише тоді, коли буде зустріч з підстраховкою або якщо щось трапиться.\n\nВідмовитися можна будь-коли командою /stop.'
+            : 'Зрозуміли, не писатимемо.',
+      })
+    return json({ ok: true })
+  }
 
   // Безпечна зустріч: answers to «Все добре?»
   if (cb?.data?.startsWith('sf:')) {
@@ -158,6 +175,12 @@ export async function POST(request: Request): Promise<Response> {
     return json({ ok: true })
   }
 
+  if (msg?.from && msg.text?.startsWith('/stop')) {
+    const n = await stopBeingTrusted(msg.from.id)
+    await send(token, msg.chat.id, n ? 'Готово, ви більше не довірена людина. Ми не писатимемо.' : 'Ви ні в кого не довірена людина.')
+    return json({ ok: true })
+  }
+
   if (!msg?.from || !msg.text?.startsWith('/start')) return json({ ok: true })
 
   const site = `https://${request.headers.get('host')}`
@@ -184,6 +207,28 @@ export async function POST(request: Request): Promise<Response> {
       await send(token, msg.chat.id, 'Це посилання для входу вже не діє. Натисни «Увійти через Telegram» на сайті ще раз.', {
         inline_keyboard: [[{ text: 'Відкрити сайт', url: `${site}/app` }]],
       })
+    }
+    return json({ ok: true })
+  }
+
+  if (arg.startsWith('tr_')) {
+    const id = arg.slice(3)
+    const inv = await openInvite(id, msg.from)
+    if (!inv) {
+      await send(token, msg.chat.id, 'Це запрошення вже не діє. Попроси надіслати нове.')
+    } else if (inv.self) {
+      await send(token, msg.chat.id, 'Це твоє власне запрошення 🙂 Перешли посилання людині, якій довіряєш.')
+    } else if (inv.status === 'ok') {
+      await send(token, msg.chat.id, '✓ Ви вже довірена людина. Відмовитися: /stop')
+    } else {
+      const added = inv.gender === 'Жінка' ? 'додала' : inv.gender === 'Чоловік' ? 'додав' : 'додав(ла)'
+      const who = inv.gender === 'Жінка' ? 'вона була' : inv.gender === 'Чоловік' ? 'він був' : 'людина була'
+      await send(
+        token,
+        msg.chat.id,
+        `Привіт! Це today — сервіс зустрічей на сьогодні.\n\n${inv.ownerName} ${added} вас як довірену людину. Якщо під час зустрічі не буде відповіді або зв’язку, ми напишемо вам тут, де ${who} востаннє.\n\nЗгодні?`,
+        { inline_keyboard: [[{ text: 'Так, згоден(на)', callback_data: `tr:${id}:y` }], [{ text: 'Ні, дякую', callback_data: `tr:${id}:n` }]] },
+      )
     }
     return json({ ok: true })
   }
