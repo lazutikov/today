@@ -94,7 +94,11 @@
     const b = e.submitter; b.disabled = true
     const r = await call('POST', { phone: $('phone').value })
     b.disabled = false
-    if (!r.ok) return err(ERR[r.error] || 'Помилка: ' + r.error)
+    if (!r.ok) {
+      if (/PHONE_NUMBER_INVALID/.test(r.error || '')) return err('Telegram не знає такого номера. Перевір: для України це +380 і ще 9 цифр.')
+      if (/FLOOD/.test(r.error || '')) return err('Telegram просить зачекати перед новою спробою. Спробуй за кілька хвилин.')
+      return err(ERR[r.error] || 'Помилка: ' + r.error)
+    }
     $('phoneForm').hidden = true; $('codeForm').hidden = false; $('code').focus()
   }
 
