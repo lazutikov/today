@@ -2988,3 +2988,11 @@ html:has(.screen) body {
 .ob-ga-row .ob-age { max-width: none; width: 100%; text-align: center; padding: 12px 10px; font-size: 16px; }
 .ob-ga-row .ob-gender { gap: 6px; }
 .ob-ga-row .ob-gender .ob-chip { padding: 12px 4px; font-size: 14px; }
+
+/* Bigger type on feed cards */
+.fcard .fcard-title { font-size: 21px; line-height: 27px; }
+.fcard .fcard-row { font-size: 17px; line-height: 24px; gap: 10px; }
+.fcard .fcard-row > .ico { width: 20px; height: 20px; margin-top: 2px; }
+.fcard .fcard-row .fcard-venue,
+.fcard .fcard-row .fcard-near { font-size: 17px; line-height: 24px; }
+.fcard .fcard-addr { font-size: 15px; line-height: 21px; }
