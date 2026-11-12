@@ -232,6 +232,17 @@ export default function Site() {
           </p>
           <Cta where="hero" />
         </div>
+        {/* What Safety mode looks like for the trusted person: a glimpse, not a promise of rescue */}
+        <a className="w-hero-safe" href="#safety" aria-label="Safety mode: детальніше">
+          <span className="w-hero-safe-icon" aria-hidden="true">
+            <ShieldMark />
+          </span>
+          <span className="w-hero-safe-text">
+            <b>Safety mode увімкнено</b>
+            <span>Мама знає, де ти, до 22:00</span>
+          </span>
+          <span className="w-hero-safe-dot" aria-hidden="true" />
+        </a>
       </header>
 
       <section className="w-intro" aria-labelledby="intro-title">
