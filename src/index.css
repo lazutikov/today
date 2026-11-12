@@ -2845,3 +2845,7 @@ html:has(.screen) body {
 .safety-entry > span:first-child { display: grid; gap: 2px; font-size: 13px; color: #6b6b6b; }
 .safety-entry b { font-size: 16px; color: #141414; }
 .safety-entry > span:last-child { font-size: 22px; color: #9a9a9a; }
+.safety-state { display: grid; gap: 6px; padding: 16px; border-radius: 20px; background: #ebebeb; font-size: 14px; line-height: 1.45; color: #555; }
+.safety-state b { font-size: 17px; color: #141414; }
+.safety-state.on { background: #e3f5ea; }
+.safety-state.on b { color: #1f6b3f; }

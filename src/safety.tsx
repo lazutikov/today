@@ -471,23 +471,23 @@ export function SafetySettings({ onAgreed }: { onAgreed: (name: string) => void 
   const set = (patch: Partial<SafetyPrefs>) => savePrefs({ ...prefs, ...patch })
   return (
     <>
-      <button
-        className={prefs.on ? 'dtoggle on' : 'dtoggle'}
-        role="switch"
-        aria-checked={prefs.on}
-        disabled={!agreed && !prefs.on}
-        onClick={() => set({ on: !prefs.on })}
-      >
-        <span className="dtoggle-text">
-          <b>Safety mode {prefs.on ? 'увімкнено' : 'вимкнено'}</b>
-          <span>
-            {agreed
-              ? 'Кожен матч автоматично отримує підстраховку: довірені люди знають, де ти, а бот питає «Все добре?».'
-              : 'Спершу додай хоча б одну довірену людину нижче.'}
-          </span>
+      <div className={prefs.on ? 'safety-state on' : 'safety-state'}>
+        <b>{prefs.on ? '● Safety mode увімкнено' : 'Safety mode вимкнено'}</b>
+        <span>
+          Кожен твій матч отримує підстраховку: довірені люди знають, де ти, а бот питає «Все добре?». Не
+          відповіси — бот напише їм, де ти була востаннє.
         </span>
-        <span className="dtoggle-knob" aria-hidden="true" />
-      </button>
+      </div>
+      {prefs.on ? (
+        <button className="dbtn dbtn-ghost" onClick={() => set({ on: false })}>
+          Вимкнути Safety mode
+        </button>
+      ) : (
+        <button className="dbtn" disabled={!agreed} onClick={() => set({ on: true })}>
+          Увімкнути Safety mode
+        </button>
+      )}
+      {!agreed && <p className="dhint">Щоб увімкнути, додай хоча б одну довірену людину нижче.</p>}
 
       <TrustedSection onAgreed={onAgreed} />
 
