@@ -2700,3 +2700,68 @@ html:has(.screen) body {
   font-size: 15px;
   line-height: 21px;
 }
+
+/* Map in a card's details */
+.dmap {
+  position: relative;
+  isolation: isolate;
+  height: 168px;
+  margin: 12px 0 4px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #e9e7e2;
+}
+
+.dmap-box,
+.dmap .leaflet-container {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  background: #e9e7e2;
+  font: inherit;
+}
+
+.dmap .leaflet-pane,
+.dmap .leaflet-control-container {
+  z-index: 1;
+}
+
+.dmap .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 0 6px;
+  border-radius: 8px 0 0 0;
+}
+
+.dmap-pin {
+  background: none;
+  border: 0;
+}
+
+.dmap-route {
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  bottom: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.dmap-note {
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  top: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #333;
+  font-size: 13px;
+}

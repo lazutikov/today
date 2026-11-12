@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { mapsLink, nearestArea, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
+const DetailMap = lazy(() => import('./DetailMap'))
 import { CITY, EVENTS, formatAreas, INVITERS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
@@ -1261,11 +1262,19 @@ function DetailSheet({
       <div className="dsheet-card">
         <CardView card={card} from={from} showTags />
       </div>
-      {card.lat !== undefined && card.lon !== undefined && (
-        <a className="route-link" href={mapsLink({ lat: card.lat, lon: card.lon })} target="_blank" rel="noopener">
-          Маршрут
-        </a>
-      )}
+      {card.lat !== undefined && card.lon !== undefined ? (
+        <Suspense fallback={<div className="dmap" />}>
+          <DetailMap
+            point={{ lat: card.lat, lon: card.lon }}
+            me={from}
+            href={mapsLink({ lat: card.lat, lon: card.lon })}
+          />
+        </Suspense>
+      ) : card.near ? (
+        <Suspense fallback={<div className="dmap" />}>
+          <DetailMap point={card.near} area me={from} />
+        </Suspense>
+      ) : null}
       {card.mine ? (
         <button className="dbtn dbtn-ghost" onClick={onDelete}>
           Видалити пост
