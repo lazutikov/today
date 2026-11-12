@@ -7,13 +7,15 @@
  */
 import { json, OWNER_USERNAME, readJson, readSession } from './_kv.js'
 import QRCode from 'qrcode'
-import { loginFinish, loginResend, loginSendCode, logoutSender, qrStep, senderConfigured, senderReady } from './_sender.js'
+import { loginFinish, loginResend, loginSendCode, logoutSender, qrStep, renamedContacts, senderConfigured, senderReady } from './_sender.js'
 
 const isOwner = (request: Request) => readSession(request)?.username?.toLowerCase() === OWNER_USERNAME
 
 export async function GET(request: Request): Promise<Response> {
   if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
-  return json({ ok: true, configured: senderConfigured, account: await senderReady() })
+  const account = await senderReady()
+  const renamed = account ? await renamedContacts().catch(() => []) : []
+  return json({ ok: true, configured: senderConfigured, account, renamed })
 }
 
 export async function POST(request: Request): Promise<Response> {

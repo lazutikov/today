@@ -95,6 +95,7 @@
     if (r.account) {
       $('status').innerHTML = `<p class="ok">Підключено${r.account.username ? ': @' + r.account.username : ''}${r.account.name ? ' (' + r.account.name + ')' : ''}</p>
         <ol><li>Перевір, що в акаунта є ім’я «today · безпека» і фото.</li><li>Додай когось у «Довірені люди» на сайті — їм прийде запрошення.</li></ol>
+        ${r.renamed && r.renamed.length ? `<p><b>Ці контакти раніше перейменувало на «today …»</b> — поверни їм імена в Telegram:</p><ul>${r.renamed.map((x) => '<li>' + x.phone + (x.name ? ' (' + x.name + ')' : '') + '</li>').join('')}</ul>` : ''}
         <button class="ghost" id="logout">Відключити</button>`
       $('logout').onclick = async () => { await call('DELETE'); location.reload() }
       $('phoneForm').hidden = true; $('codeForm').hidden = true; $('qrStart').hidden = true

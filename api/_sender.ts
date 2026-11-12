@@ -68,13 +68,8 @@ function toPeer(u: Api.TypeUser | undefined): Peer | null {
 export async function findPerson(c: TelegramClient, handle: string): Promise<Peer | null> {
   try {
     if (handle.startsWith('+')) {
-      const r = await c.invoke(
-        new Api.contacts.ImportContacts({
-          contacts: [
-            new Api.InputPhoneContact({ clientId: bigInt(Date.now()), phone: handle, firstName: 'today', lastName: handle }),
-          ],
-        }),
-      )
+      // Look the number up without touching the account's contacts
+      const r = await c.invoke(new Api.contacts.ResolvePhone({ phone: handle.replace(/^\+/, '') }))
       return toPeer(r.users[0])
     }
     const r = await c.invoke(new Api.contacts.ResolveUsername({ username: handle }))
@@ -281,6 +276,17 @@ export async function qrStep(fresh = false, dc = 2): Promise<QrResult> {
     await c.disconnect().catch(() => {})
     await c.destroy().catch(() => {})
   }
+}
+
+/** Contacts an earlier version renamed to «today +380…» when looking people up by phone */
+export async function renamedContacts(): Promise<{ phone: string; name: string }[]> {
+  return withSender(async (c) => {
+    const r = await c.invoke(new Api.contacts.GetContacts({ hash: bigInt(0) }))
+    if (!('users' in r)) return []
+    return r.users
+      .filter((u): u is Api.User => u instanceof Api.User && u.firstName === 'today' && (u.lastName ?? '').startsWith('+'))
+      .map((u) => ({ phone: u.lastName ?? '', name: u.username ? '@' + u.username : '' }))
+  })
 }
 
 export async function logoutSender() {
