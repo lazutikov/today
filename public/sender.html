@@ -175,6 +175,7 @@
       $('qrDebug').textContent = (r.debug || '') + ' · ' + new Date().toLocaleTimeString()
       return setTimeout(qrPoll, 2500)
     }
+    if (r.state === 'wait') { $('qrDebug').textContent = (r.debug || '') + ' · ' + new Date().toLocaleTimeString(); $('qrNote').textContent = 'Відскановано, завершуємо вхід…'; return setTimeout(qrPoll, 1000) }
     if (r.state === 'need_password') { $('qr').innerHTML = '<p>✓ Відскановано</p>'; $('qrPwdBox').hidden = false; $('qrPwd').focus(); return }
     if (r.state === 'ok') { $('qrBox').hidden = true; load() }
   }

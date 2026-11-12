@@ -181,57 +181,96 @@ export async function loginFinish(code: string, password?: string): Promise<'ok'
 /* ---------- QR login: scan in Telegram → Settings → Devices → Link Desktop Device ---------- */
 
 const QR = 'sender:qr'
+const QR_MIGRATE = 'sender:qrmigrate'
+const DC_IP: Record<number, string> = {
+  1: '149.154.175.53',
+  2: '149.154.167.51',
+  3: '149.154.175.100',
+  4: '149.154.167.91',
+  5: '91.108.56.130',
+}
+
+/** No single Telegram call may hang the request: Vercel cuts it off */
+function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`timeout: ${what}`)), ms))])
+}
 
 async function saveMe(c: TelegramClient) {
-  const me = await c.getMe()
+  const me = await within(c.getMe(), 15000, 'getMe')
   await kv('SET', SESSION, c.session.save() as unknown as string)
   await kv('SET', ME, JSON.stringify({ username: me.username, name: [me.firstName, me.lastName].filter(Boolean).join(' ') }))
-  await kv('DEL', QR, PENDING)
+  await kv('DEL', QR, QR_MIGRATE, PENDING)
+}
+
+function freshClient(dc: number) {
+  const c = client()
+  c.session.setDC(dc, DC_IP[dc] ?? DC_IP[2], 80)
+  return c
+}
+
+type QrResult =
+  | { state: 'show'; url: string; expires: number; debug?: string }
+  | { state: 'wait'; debug?: string }
+  | { state: 'ok' }
+  | { state: 'need_password' }
+
+async function needPassword(c: TelegramClient): Promise<QrResult> {
+  await kv('SET', PENDING, JSON.stringify({ phone: '', hash: '', session: c.session.save(), needPassword: true }), 'EX', 600)
+  await kv('DEL', QR, QR_MIGRATE)
+  return { state: 'need_password' }
 }
 
 /**
- * Start or continue a QR login. Each call asks Telegram once:
- * a fresh token to show (not scanned yet), 'ok' when accepted on the phone,
- * or 'need_password' when the account has 2FA.
+ * One short step of a QR login per request (serverless):
+ * show a token → after the scan Telegram says "go to your home DC" →
+ * the next request opens a new connection there and imports the token.
  */
-export async function qrStep(fresh = false): Promise<{ state: 'show'; url: string; expires: number; debug?: string } | { state: 'ok' } | { state: 'need_password' }> {
-  if (fresh) await kv('DEL', QR)
-  const saved = (await kv('GET', QR)) as string | null
-  const c = client(saved ?? '')
-  await c.connect()
-  try {
-    // Scanned since the last poll: this connection is already signed in
-    if (saved && (await c.checkAuthorization().catch(() => false))) {
-      await saveMe(c)
-      return { state: 'ok' }
-    }
-    let r: Api.auth.TypeLoginToken
+export async function qrStep(fresh = false, dc = 2): Promise<QrResult> {
+  if (fresh) await kv('DEL', QR, QR_MIGRATE)
+
+  // Second half of a scan: finish on the account's home DC with a new connection
+  const mig = (await kv('GET', QR_MIGRATE)) as string | null
+  if (mig) {
+    const m = JSON.parse(mig) as { dc: number; token: string }
+    const c = freshClient(m.dc)
+    await within(c.connect(), 15000, 'connect home dc')
     try {
-      r = await c.invoke(new Api.auth.ExportLoginToken({ apiId: API_ID, apiHash: API_HASH, exceptIds: [] }))
+      const r = await within(c.invoke(new Api.auth.ImportLoginToken({ token: Buffer.from(m.token, 'base64') })), 20000, 'import')
+      if (r instanceof Api.auth.LoginTokenSuccess) {
+        await saveMe(c)
+        return { state: 'ok' }
+      }
+      return { state: 'wait', debug: `import → ${(r as { className?: string }).className}` }
     } catch (e) {
       const msg = e instanceof Error ? e.message : ''
-      if (msg.includes('SESSION_PASSWORD_NEEDED')) {
-        await kv('SET', PENDING, JSON.stringify({ phone: '', hash: '', session: c.session.save(), needPassword: true }), 'EX', 600)
-        return { state: 'need_password' }
-      }
+      if (msg.includes('SESSION_PASSWORD_NEEDED')) return needPassword(c)
+      await kv('DEL', QR_MIGRATE)
       throw e
+    } finally {
+      await c.disconnect().catch(() => {})
+      await c.destroy().catch(() => {})
     }
-    if (r instanceof Api.auth.LoginTokenMigrateTo) {
-      await c._switchDC(r.dcId)
-      try {
-        r = await c.invoke(new Api.auth.ImportLoginToken({ token: r.token }))
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : ''
-        if (msg.includes('SESSION_PASSWORD_NEEDED')) {
-          await kv('SET', PENDING, JSON.stringify({ phone: '', hash: '', session: c.session.save(), needPassword: true }), 'EX', 600)
-          return { state: 'need_password' }
-        }
-        throw e
-      }
+  }
+
+  const saved = (await kv('GET', QR)) as string | null
+  const c = saved ? client(saved) : freshClient(dc)
+  await within(c.connect(), 15000, 'connect')
+  try {
+    let r: Api.auth.TypeLoginToken
+    try {
+      r = await within(c.invoke(new Api.auth.ExportLoginToken({ apiId: API_ID, apiHash: API_HASH, exceptIds: [] })), 15000, 'export')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ''
+      if (msg.includes('SESSION_PASSWORD_NEEDED')) return needPassword(c)
+      throw e
     }
     if (r instanceof Api.auth.LoginTokenSuccess) {
       await saveMe(c)
       return { state: 'ok' }
+    }
+    if (r instanceof Api.auth.LoginTokenMigrateTo) {
+      await kv('SET', QR_MIGRATE, JSON.stringify({ dc: r.dcId, token: Buffer.from(r.token).toString('base64') }), 'EX', 60)
+      return { state: 'wait', debug: `scanned → home dc ${r.dcId}` }
     }
     const t = r as Api.auth.LoginToken
     const saved2 = c.session.save() as unknown as string
@@ -245,5 +284,5 @@ export async function qrStep(fresh = false): Promise<{ state: 'show'; url: strin
 }
 
 export async function logoutSender() {
-  await kv('DEL', SESSION, ME, PENDING, QR)
+  await kv('DEL', SESSION, ME, PENDING, 'sender:qr', 'sender:qrmigrate')
 }
