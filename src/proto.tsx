@@ -1719,6 +1719,10 @@ function ProfileSheet({
   onSave: (p: Profile) => void
 }) {
   const { enabled: safetyOn } = useSafetyStore()
+  // The feature may have been switched on after the page loaded
+  useEffect(() => {
+    syncSafety()
+  }, [])
   const [bio, setBio] = useState(profile.bio)
   const [ga, setGa] = useState<Pick<Profile, 'gender' | 'age'>>({
     gender: profile.gender,
