@@ -970,7 +970,7 @@ function FeedApp({ onSignOut, onOnboarding }: { onSignOut: () => void; onOnboard
               </button>
             )}
             <button className="dbtn" onClick={() => setOverlay({ t: 'create' })}>
-              {tab === 'events' ? 'Створити такий план' : 'Написати, що хочу'}
+              {tab === 'events' ? 'Створити таку подію' : 'Написати, що хочу'}
             </button>
             <button
               className="dlink"
@@ -2178,7 +2178,7 @@ function PostedSheet({ card, onClose }: { card: FeedCard; onClose: () => void })
       heading={
         <Sticker
           lines={[
-            { text: 'твій план', tag: card.tags[0] ?? 'Кава' },
+            { text: card.kind === 'event' ? 'твоя подія' : 'твій пост', tag: card.tags[0] ?? 'Кава' },
             { text: 'в ефірі', tag: 'Ігри' },
           ]}
         />
@@ -2219,7 +2219,7 @@ function FeedEnd({
         ]}
       />
       <p className="feed-end-text">
-        Поки нікого{where} на сьогодні. Напиши, що хочеш, і люди побачать твій план першим.
+        Поки нікого{where} на сьогодні. Напиши, що хочеш, і люди побачать твій пост першим.
       </p>
       <button className="dbtn" onClick={onCreate}>
         {kind === 'people' ? 'Покличте мене' : 'Кличу з собою'}
