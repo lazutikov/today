@@ -206,6 +206,13 @@ export default function Proto() {
         resetIdentity()
         clearTgUser()
         setSignedIn(false)
+        // This device forgets the person; the server copy comes back on the next sign-in
+        try {
+          for (const k of ['today.profile', 'today.trusted', 'today.safety', 'today.safetyPrefs', 'today.myPosts'])
+            localStorage.removeItem(k)
+        } catch {
+          /* private mode */
+        }
         // On the real site go back to the landing page; inside Telegram or the preview, to the start screen.
         if (import.meta.env.VITE_TG_BOT_ID && !inMiniApp) location.href = `./${location.hash}`
         else setStage('landing')

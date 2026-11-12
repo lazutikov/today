@@ -245,6 +245,12 @@ export async function deleteUser(userId: number) {
     await kv('DEL', `mypost:${userId}:${kind}`)
   }
   await kv('DEL', `profile:${userId}`, `notif:${userId}`, `notifseen:${userId}`, `tgphoto:${userId}`, `matches:${userId}`, `inbox:${userId}`)
+  // Safety mode: trusted people and an active safety net
+  const raw = (await kv('GET', `safety:${userId}`)) as string | null
+  if (raw) await kv('DEL', `safetok:${(JSON.parse(raw) as { token: string }).token}`)
+  await kv('SREM', 'safety:active', userId)
+  await kv('SREM', `subs:${p?.city ?? 'lviv'}`, userId)
+  await kv('DEL', `safety:${userId}`, `trusted:${userId}`, `uname:${userId}`)
 }
 
 /* ---------- Notifications: everything the bot says, also kept for the app ---------- */
