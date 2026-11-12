@@ -15,6 +15,7 @@
  */
 import { randomBytes } from 'node:crypto'
 import { esc, json, km, kv, phCapture, tg } from './_kv.js'
+import { findPerson, senderReady, sendText, withSender, type Peer } from './_sender.js'
 
 export type Trusted = {
   /** Invite id, also the key in the client */
@@ -26,6 +27,8 @@ export type Trusted = {
   chatId?: number
   name?: string
   username?: string
+  /** Resolved Telegram user, to write from the sender account */
+  peer?: Peer
   invitedAt: number // seconds
 }
 
@@ -100,6 +103,27 @@ export async function publicTrusted(l: Trusted[]) {
 
 const verb = (g: SafetyState['gender'] | undefined, m: string, f: string, n: string) =>
   g === 'Жінка' ? f : g === 'Чоловік' ? m : n
+
+export const cleanHandle = (raw: unknown): string | null => {
+  if (typeof raw !== 'string') return null
+  const t = raw.trim().replace(/^https?:\/\/t\.me\//, '').replace(/^@/, '')
+  if (/^\+?\d[\d\s()-]{8,}$/.test(t)) return '+' + t.replace(/\D/g, '')
+  return /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(t) ? '@' + t.toLowerCase() : null
+}
+
+/** Add by @nick or phone: shown as typed; written to from the sender account when needed */
+export async function addTrustedHandle(ownerId: number, raw: unknown): Promise<{ ok: true; list: Trusted[] } | { ok: false; error: string }> {
+  const h = cleanHandle(raw)
+  if (!h) return { ok: false, error: 'bad_handle' }
+  const list = await getTrusted(ownerId)
+  if (list.some((t) => t.label === h)) return { ok: false, error: 'exists' }
+  if (list.length >= 3) return { ok: false, error: 'too_many' }
+  const id = randomBytes(9).toString('base64url')
+  const next = [...list, { handle: id, label: h, status: 'ok' as const, invitedAt: Math.floor(Date.now() / 1000) }]
+  await saveTrusted(ownerId, next)
+  await phCapture('trusted_added', String(ownerId), { by: h.startsWith('+') ? 'phone' : 'nick' })
+  return { ok: true, list: next }
+}
 
 /** A new invite: the owner shares the link, the person opens it in Telegram */
 export async function inviteTrusted(
@@ -211,11 +235,38 @@ function kyivTime(hhmm: string): number {
 }
 
 async function toGuardians(s: SafetyState, html: string) {
-  const list = (await getTrusted(s.uid)).filter((t) => s.guardians.includes(t.handle) && t.status === 'ok' && t.chatId)
+  const list = (await getTrusted(s.uid)).filter((t) => s.guardians.includes(t.handle) && t.status === 'ok')
   let sent = 0
-  for (const t of list) {
+  // Agreed through the bot: the bot writes
+  for (const t of list.filter((x) => x.chatId)) {
     const r = await tg('sendMessage', { chat_id: t.chatId, text: html, parse_mode: 'HTML', link_preview_options: { is_disabled: true } })
     if (r.ok) sent++
+  }
+  // Added by @nick / phone: the sender account writes
+  const byHandle = list.filter((x) => !x.chatId && (x.label.startsWith('@') || x.label.startsWith('+')))
+  if (byHandle.length && (await senderReady())) {
+    let changed = false
+    await withSender(async (c) => {
+      for (const t of byHandle) {
+        if (!t.peer) {
+          const p = await findPerson(c, t.label.replace(/^@/, '')).catch(() => null)
+          if (!p) continue
+          t.peer = p
+          changed = true
+        }
+        await sendText(c, t.peer, html)
+          .then(() => sent++)
+          .catch(() => {})
+      }
+    }).catch(() => {})
+    if (changed) {
+      const all = await getTrusted(s.uid)
+      for (const t of byHandle) {
+        const x = all.find((a) => a.handle === t.handle)
+        if (x && t.peer) x.peer = t.peer
+      }
+      await saveTrusted(s.uid, all)
+    }
   }
   return sent
 }
@@ -228,7 +279,7 @@ export async function startSafety(
   const trusted = await getTrusted(user.id)
   const guardians = (Array.isArray(b.guardians) ? b.guardians : [])
     .map(cleanId)
-    .filter((h): h is string => Boolean(h) && trusted.some((t) => t.handle === h && t.status === 'ok' && t.chatId))
+    .filter((h): h is string => Boolean(h) && trusted.some((t) => t.handle === h && t.status === 'ok'))
   if (!guardians.length) return { ok: false, error: 'no_guardians' }
   const time = typeof b.time === 'string' && /^\d{1,2}:\d{2}$/.test(b.time) ? b.time : '19:00'
   const checkAt = typeof b.checkAt === 'string' && /^\d{1,2}:\d{2}$/.test(b.checkAt) ? b.checkAt : time

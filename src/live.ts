@@ -167,8 +167,8 @@ export async function fetchTrusted(): Promise<{ ready: boolean; list: TrustedRow
   const r = await api<{ ok: boolean; ready?: boolean; list?: TrustedRow[] }>('/api/trusted')
   return { ready: Boolean(r.ready), list: r.list ?? [] }
 }
-export async function addTrustedApi(label: string): Promise<{ ok: boolean; list?: TrustedRow[]; link?: string; error?: string }> {
-  return api('/api/trusted', { method: 'POST', body: JSON.stringify({ label }) })
+export async function addTrustedApi(handle: string): Promise<{ ok: boolean; list?: TrustedRow[]; error?: string }> {
+  return api('/api/trusted', { method: 'POST', body: JSON.stringify({ handle }) })
 }
 export async function removeTrustedApi(handle: string) {
   await api(`/api/trusted?handle=${encodeURIComponent(handle)}`, { method: 'DELETE' })

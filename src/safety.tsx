@@ -159,7 +159,8 @@ export function cleanHandle(raw: string): { handle: string; error?: string } {
 
 
 const ERRORS: Record<string, string> = {
-  no_label: 'Напиши, як підписати людину, наприклад «Мама»',
+  bad_handle: 'Впиши нік у Telegram (@katya) або номер телефону (+380…)',
+  exists: 'Цю людину вже додано',
   too_many: 'Не більше трьох людей',
 }
 
@@ -178,33 +179,23 @@ export async function shareInvite(link: string) {
   window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(INVITE_TEXT)}`, '_blank', 'noopener')
 }
 
-/** A new trusted person: make an invite and share it. Returns an error text or null. */
-export async function addTrusted(rawLabel: string, onAgreed: (name: string) => void): Promise<string | null> {
-  const label = rawLabel.trim()
-  if (!label) return ERRORS.no_label
+/** Add a trusted person by @nick or phone; shown in the list as typed */
+export async function addTrusted(raw: string): Promise<string | null> {
+  const { handle, error } = cleanHandle(raw)
+  if (error) return error
+  const shownAs = handle.startsWith('+') ? handle : '@' + handle
   const list = loadTrusted()
-  if (list.filter((t) => t.status !== 'no').length >= 3) return ERRORS.too_many
+  if (list.some((t) => t.label === shownAs)) return 'Цю людину вже додано'
+  if (list.length >= 3) return ERRORS.too_many
   if (isLive()) {
-    const r = await addTrustedApi(label).catch(() => ({ ok: false, error: 'network' }) as { ok: boolean; error?: string; list?: Trusted[]; link?: string })
+    const r = await addTrustedApi(shownAs).catch(() => ({ ok: false, error: 'network' }) as { ok: boolean; error?: string; list?: Trusted[] })
     if (r.ok && r.list) {
-      // Sharing needs a fresh tap (phones block it after a network wait): the row shows the button
       write(TRUSTED_KEY, r.list)
       return null
     }
-    return ERRORS[r.error ?? ''] ?? 'Не вдалося створити запрошення. Спробуй ще раз.'
+    return ERRORS[r.error ?? ''] ?? 'Не вдалося додати. Спробуй ще раз.'
   }
-  // Demo: the person opens the link and says «Так» a few seconds later
-  const handle = `demo${Date.now().toString(36)}`
-  write(TRUSTED_KEY, [...list, { handle, name: '', label, status: 'wait', link: 'https://t.me/today_bot?start=tr_demo' }])
-  window.setTimeout(() => {
-    const now = loadTrusted()
-    if (!now.some((t) => t.handle === handle)) return
-    write(
-      TRUSTED_KEY,
-      now.map((t) => (t.handle === handle ? { ...t, status: 'ok' as const, name: 'Катя · @katya_lviv' } : t)),
-    )
-    onAgreed(label)
-  }, 4000)
+  write(TRUSTED_KEY, [...list, { handle: `demo${Date.now().toString(36)}`, name: '', label: shownAs, status: 'ok' }])
   return null
 }
 
@@ -280,75 +271,50 @@ export const guardianNames = (s: Safety, list = loadTrusted()) =>
 
 /* ---------- Profile section ---------- */
 
-export function TrustedSection({ onAgreed }: { onAgreed: (name: string) => void }) {
+export function TrustedSection(_: { onAgreed?: (name: string) => void }) {
   const { trusted } = useSafetyStore()
-  const [label, setLabel] = useState('')
+  const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const active = trusted.filter((t) => t.status !== 'no')
   const add = async () => {
     if (busy) return
     setBusy(true)
-    const err = await addTrusted(label, onAgreed)
+    const err = await addTrusted(value)
     setBusy(false)
     setError(err)
-    if (!err) setLabel('')
+    if (!err) setValue('')
   }
-  // Real site: notice when someone says «Так» in the bot
-  const waiting = trusted.filter((t) => t.status === 'wait').map((t) => t.handle).join(',')
-  useEffect(() => {
-    if (!isLive() || !waiting) return
-    const before = new Map(loadTrusted().map((t) => [t.handle, t.status]))
-    const id = window.setInterval(async () => {
-      await syncSafety()
-      for (const t of loadTrusted()) if (before.get(t.handle) === 'wait' && t.status === 'ok') onAgreed(shown(t))
-    }, 5000)
-    return () => window.clearInterval(id)
-  }, [waiting]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <p className="dlabel">
         Довірені люди <span className="dopt">до 3</span>
       </p>
-      <p className="dhint dhint-left">
-        Бот today напише їм у Telegram, якщо під час зустрічі ти не відповіси або зникнеш зі зв’язку. Надішли
-        людині запрошення — вона відкриє його і натисне «Так».
-      </p>
+      <p className="dhint dhint-left">Напишемо їм у Telegram, якщо під час зустрічі ти не відповіси або зникнеш зі зв’язку.</p>
       {trusted.map((t) => (
         <div className="my-place" key={t.handle}>
           <span className="trusted-who">
             <b>{shown(t)}</b>
-            {t.status === 'ok' && t.name && <span>{t.name}</span>}
-            {t.status === 'wait' && t.link && (
-              <button className="dchip on trusted-send" onClick={() => shareInvite(t.link!)}>
-                Надіслати запрошення
-              </button>
-            )}
-          </span>
-          <span className={`tstatus tstatus-${t.status}`}>
-            {t.status === 'ok' ? '✓ погодились' : t.status === 'no' ? 'відмова' : 'чекаємо'}
           </span>
           <button className="dlink" onClick={() => removeTrusted(t.handle)} aria-label={`Прибрати ${shown(t)}`}>
             ✕
           </button>
         </div>
       ))}
-      {active.length < 3 && (
+      {trusted.length < 3 && (
         <div className="trusted-add">
           <input
             className="dinput"
-            placeholder="Хто це? Напр. «Мама»"
-            maxLength={30}
-            value={label}
+            placeholder="@нік або номер телефону"
+            value={value}
             onChange={(e) => {
-              setLabel(e.target.value)
+              setValue(e.target.value)
               setError(null)
             }}
             onKeyDown={(e) => e.key === 'Enter' && add()}
-            aria-label="Як підписати людину"
+            aria-label="Нік або номер у Telegram"
           />
           <button className="dchip on" onClick={add} disabled={busy}>
-            {busy ? '…' : 'Запросити'}
+            {busy ? '…' : 'Додати'}
           </button>
         </div>
       )}
