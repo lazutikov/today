@@ -178,7 +178,7 @@ export function CardView({
   onOpen?: () => void
   /** My position (stays on the phone): adds the time to get there */
   from?: Coords | null
-  /** Categories take space in the feed; shown only in the card's details */
+  /** Details view: adds categories and the bio, which take too much space in the feed */
   showTags?: boolean
 }) {
   const who = whoLine(card)
@@ -222,7 +222,7 @@ export function CardView({
           <UserIcon />
           <div>
             <p className="fcard-venue">{who}</p>
-            {card.bio && <p className="fcard-addr">{card.bio}</p>}
+            {showTags && card.bio && <p className="fcard-addr">{card.bio}</p>}
           </div>
         </div>
       </div>
