@@ -74,6 +74,7 @@ export type EventName =
   | 'feed_view'
   | 'safety_on'
   | 'onboarding_step'
+  | 'onboarding_restart'
   | 'safety_live'
   | 'safety_off'
   | 'trusted_add'

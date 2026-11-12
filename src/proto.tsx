@@ -143,6 +143,8 @@ export default function Proto() {
   }, [])
   // On the real site a sign-in without a server session (made before the shared feed) doesn't count.
   const signedIn = () => isSignedIn() && (!telegramEnabled || Boolean(loadSession()))
+  // Opened again from the profile: show every question, even ones we know answers to
+  const [restarted, setRestarted] = useState(false)
   const [stage, setStage] = useState<Stage>(() => (signedIn() ? 'app' : inMiniApp ? 'connecting' : 'landing'))
 
   useEffect(() => {
@@ -190,7 +192,7 @@ export default function Proto() {
     return (
       <Onboarding
         profile={withGuessedGender(loadProfile())}
-        genderKnown={Boolean(loadProfile().gender)}
+        genderKnown={Boolean(loadProfile().gender) && !restarted}
         onDone={(p) => {
           saveProfile(p)
           saveProfileRemote(p, getSpotKey())
@@ -201,6 +203,11 @@ export default function Proto() {
     )
   return (
     <FeedApp
+      onOnboarding={() => {
+        track('onboarding_restart')
+        setRestarted(true)
+        setStage('onboarding')
+      }}
       onSignOut={() => {
         track('sign_out')
         resetIdentity()
@@ -254,7 +261,7 @@ function saveMyPosts(cards: FeedCard[]) {
   }
 }
 
-function FeedApp({ onSignOut }: { onSignOut: () => void }) {
+function FeedApp({ onSignOut, onOnboarding }: { onSignOut: () => void; onOnboarding: () => void }) {
   const [tab, setTab] = useState<Tab>('events')
   // Signed in through the server: own posts and answers are real. Otherwise everything is a local demo.
   const [live] = useState(isLive)
@@ -1169,6 +1176,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         <ProfileSheet
           profile={profile}
           onSignOut={onSignOut}
+          onOnboarding={onOnboarding}
           onClose={() => setOverlay(null)}
           onSave={(next) => {
             updateProfile(next)
@@ -1767,11 +1775,13 @@ const HOURS = Array.from({ length: 13 }, (_, i) => `${String(i + 11).padStart(2,
 
 function ProfileSheet({
   profile,
+  onOnboarding,
   onSignOut,
   onClose,
   onSave,
 }: {
   profile: Profile
+  onOnboarding: () => void
   onSignOut: () => void
   onClose: () => void
   onSave: (p: Profile) => void
@@ -1861,6 +1871,9 @@ function ProfileSheet({
         }}
       >
         Зберегти
+      </button>
+      <button className="dlink" onClick={onOnboarding}>
+        Пройти знайомство ще раз
       </button>
       <button className="dlink" onClick={onSignOut}>
         Вийти
