@@ -72,6 +72,10 @@ export function source(): string {
 
 export type EventName =
   | 'feed_view'
+  | 'safety_on'
+  | 'safety_live'
+  | 'safety_off'
+  | 'trusted_add'
   | 'tab_switch'
   | 'card_tap'
   | 'card_cta'

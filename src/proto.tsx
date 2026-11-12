@@ -8,6 +8,7 @@ import { mapsLink, nearestArea, type Place } from './places'
 
 const PlacePicker = lazy(() => import('./PlacePicker'))
 const DetailMap = lazy(() => import('./DetailMap'))
+import { guardianNames, SAFETY_PREVIEW, setLive, startSafety, stopSafety, SafetySetup, TrustedSection, useSafetyStore, type Safety } from './safety'
 import { CITY, EVENTS, formatAreas, INVITERS, PEOPLE, TAGS, VENUES, type FeedCard } from './feed'
 import { detectTags } from './autotags'
 import { Landing, Onboarding } from './landing'
@@ -113,6 +114,8 @@ type Overlay =
   | { t: 'notifs' }
   | { t: 'spot' }
   | { t: 'filters' }
+  | { t: 'safety'; match: Match }
+  | { t: 'safety-bot'; match: Match }
   | null
 
 const ANSWER_SECONDS = 5 * 60
@@ -319,6 +322,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }, [people, events])
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [matches, setMatches] = useState<Match[]>([])
+  const { safety } = useSafetyStore()
   const [toast, setToast] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile>(loadProfile)
   const timers = useRef<number[]>([])
@@ -775,6 +779,11 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           <span className="plan-banner-dot" aria-hidden="true" />
           <span>
             Сьогодні: <b>{m.tag}</b>, {m.with[0].name}, {m.time}
+            {safety?.matchId === m.id && (
+              <span className="plan-banner-safe">
+                🛡 {safety.live ? `${guardianNames(safety)} знає, де ти, до ${safety.until}` : 'Залишився крок: геопозиція в боті'}
+              </span>
+            )}
           </span>
           <span aria-hidden="true">→</span>
         </button>
@@ -988,6 +997,14 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'match' && (
         <MatchSheet
           match={overlay.match}
+          safety={safety?.matchId === overlay.match.id ? safety : null}
+          onSafety={() => setOverlay({ t: 'safety', match: overlay.match })}
+          onSafetyBot={() => setOverlay({ t: 'safety-bot', match: overlay.match })}
+          onSafetyOff={() => {
+            stopSafety()
+            track('safety_off')
+            say('Підстраховку вимкнено. Довіреним людям написали, що все добре')
+          }}
           onClose={() => setOverlay(null)}
           onCancel={(free) => {
             track('match_cancel', { free, real: Boolean(overlay.match.reqId) })
@@ -1020,9 +1037,54 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
       {overlay?.t === 'posted' && (
         <PostedSheet card={overlay.card} onClose={() => setOverlay(null)} />
       )}
+      {overlay?.t === 'safety' && (
+        <DarkSheet title="Безпечна зустріч" onClose={() => setOverlay({ t: 'match', match: overlay.match })}>
+          <SafetySetup
+            matchId={overlay.match.id}
+            time={overlay.match.time}
+            onProfile={() => setOverlay({ t: 'profile' })}
+            onDone={(s: Safety) => {
+              startSafety(s)
+              track('safety_on', { guardians: s.guardians.length, fence: s.fence, checkAt: s.checkAt })
+              setOverlay({ t: 'safety-bot', match: overlay.match })
+            }}
+          />
+        </DarkSheet>
+      )}
+      {overlay?.t === 'safety-bot' && (
+        <DarkSheet title="Останній крок" onClose={() => setOverlay({ t: 'match', match: overlay.match })}>
+          <p className="dtext">
+            Поділись з ботом геопозицією наживо. Telegram передаватиме її, навіть коли телефон у кишені, і сам
+            вимкне через 8 годин.
+          </p>
+          <ol className="safety-steps">
+            <li>Відкрий чат з ботом today</li>
+            <li>
+              Натисни 📎 → <b>Геопозиція</b>
+            </li>
+            <li>
+              <b>Транслювати геопозицію</b> → 8 годин
+            </li>
+          </ol>
+          <button
+            className="dbtn"
+            onClick={() => {
+              // Prototype: the bot "sees" the live location right away
+              setLive()
+              track('safety_live')
+              setOverlay(null)
+              say(`Готово. ${safety ? guardianNames(safety) : 'Довірені люди'} ${safety && safety.guardians.length > 1 ? 'знають' : 'знає'} про зустріч`)
+            }}
+          >
+            Відкрити бота
+          </button>
+          <p className="dhint">У небезпеці — дзвони 112. Підстраховка не замінює екстрені служби.</p>
+        </DarkSheet>
+      )}
       {overlay?.t === 'profile' && (
         <ProfileSheet
           profile={profile}
+          say={say}
           onSignOut={onSignOut}
           onClose={() => setOverlay(null)}
           onSave={(next) => {
@@ -1443,12 +1505,20 @@ function Avatar({ name, photo }: { name: string; photo?: string }) {
 
 function MatchSheet({
   match,
+  safety,
+  onSafety,
+  onSafetyBot,
+  onSafetyOff,
   onClose,
   onCancel,
   onUncomfortable,
   onTelegram,
 }: {
   match: Match
+  safety: Safety | null
+  onSafety: () => void
+  onSafetyBot: () => void
+  onSafetyOff: () => void
   onClose: () => void
   onCancel: (free: boolean) => void
   onUncomfortable: () => void
@@ -1498,6 +1568,34 @@ function MatchSheet({
       <button className="dbtn" onClick={onTelegram}>
         Написати в Telegram
       </button>
+      {!SAFETY_PREVIEW ? null : !safety ? (
+        <button className="safety-cta" onClick={onSafety}>
+          <span aria-hidden="true">🛡</span>
+          <span>
+            <b>Безпечна зустріч</b>
+            Довірена людина знатиме, де ти, поки йде зустріч
+          </span>
+        </button>
+      ) : (
+        <div className="safety-on">
+          <span className={safety.live ? 'safety-dot' : 'safety-dot off'} aria-hidden="true" />
+          <span>
+            <b>{safety.live ? 'Підстраховка увімкнена' : 'Залишився один крок'}</b>
+            {safety.live
+              ? `${guardianNames(safety)} знає, де ти, до ${safety.until}. «Все добре?» о ${safety.checkAt}.`
+              : 'Поділись геопозицією з ботом'}
+          </span>
+          {safety.live ? (
+            <button className="dlink" onClick={onSafetyOff}>
+              Вимкнути
+            </button>
+          ) : (
+            <button className="dlink" onClick={onSafetyBot}>
+              Далі
+            </button>
+          )}
+        </div>
+      )}
       <button className="dbtn dbtn-ghost" onClick={() => onCancel(free)}>
         {free ? `Скасувати безкоштовно · ${label}` : 'Скасувати зустріч'}
       </button>
@@ -1578,8 +1676,10 @@ function ProfileSheet({
   onSignOut,
   onClose,
   onSave,
+  say,
 }: {
   profile: Profile
+  say: (text: string) => void
   onSignOut: () => void
   onClose: () => void
   onSave: (p: Profile) => void
@@ -1621,6 +1721,7 @@ function ProfileSheet({
         Стать і вік <span className="dopt">необов’язково</span>
       </p>
       <GenderAge gender={ga.gender} age={ga.age} onChange={setGa} />
+      {SAFETY_PREVIEW && <TrustedSection onAgreed={(name) => say(`${name}: «+». Тепер це твоя довірена людина`)} />}
       <p className="dlabel">
         Мої місця <span className="dopt">до 2, наприклад дім і робота</span>
       </p>

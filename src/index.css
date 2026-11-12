@@ -2765,3 +2765,55 @@ html:has(.screen) body {
   color: #333;
   font-size: 13px;
 }
+
+/* Безпечна зустріч */
+.safety-cta {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.safety-cta > span:first-child { font-size: 22px; line-height: 1; }
+.safety-cta b { display: block; font-size: 16px; margin-bottom: 2px; }
+.safety-on {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(61, 220, 132, 0.12);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.safety-on b { display: block; }
+.safety-on .dlink { width: auto; margin: 0; padding: 0; flex: none; }
+.safety-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: #3ddc84;
+  box-shadow: 0 0 0 4px rgba(61, 220, 132, 0.25);
+}
+.safety-dot.off { background: #f5b400; box-shadow: 0 0 0 4px rgba(245, 180, 0, 0.25); }
+.plan-banner-safe { display: block; font-size: 13px; opacity: 0.85; margin-top: 2px; }
+.safety-steps { margin: 4px 0 8px; padding-left: 22px; font-size: 15px; line-height: 1.7; }
+.trusted-who { flex: 1; display: grid; font-size: 15px; }
+.trusted-who span { font-size: 13px; color: var(--f-muted, #6b6b6b); }
+.tstatus { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
+.tstatus-wait { background: #fff4d6; color: #8a6200; }
+.tstatus-ok { background: #eaf7ef; color: #1f6b3f; }
+.tstatus-no { background: #f2f2f2; color: #777; }
+.trusted-add { display: flex; gap: 8px; align-items: center; }
+.trusted-add .dinput { flex: 1; min-width: 0; margin: 0; }
+.trusted-add .dchip { flex: none; }
