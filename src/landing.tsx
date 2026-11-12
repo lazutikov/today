@@ -59,7 +59,8 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       // Real site: the landing page is the start screen; /app without a login code goes back there.
       location.replace(`./${location.hash}`)
     } else {
-      prepareBotLogin().then(setBot)
+      // Demo build (no bot, e.g. a test deployment): no start screen, straight in as a guest
+      telegramLogin().then((u) => done(u, "demo"))
     }
     return () => abort.current?.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,6 +103,14 @@ export function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       setLoading(false)
     }
   }
+
+  if (!telegramEnabled)
+    return (
+      <div className="screen connecting" aria-busy="true">
+        <span className="btn-spinner" aria-hidden="true" />
+        <span>Відкриваємо демо…</span>
+      </div>
+    )
 
   // Real site: a plain waiting screen, the marketing lives on the landing page.
   if (telegramEnabled) {
