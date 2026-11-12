@@ -5,7 +5,7 @@
  *  POST   /api/sender {code, password?}     finish sign-in (password = 2FA, if set)
  *  DELETE /api/sender                       disconnect
  */
-import { json, OWNER_USERNAME, readJson, readSession } from './_kv.js'
+import { json, OWNER_USERNAME, readJson, readSession, wipeKeys } from './_kv.js'
 import QRCode from 'qrcode'
 import { loginFinish, loginResend, loginSendCode, logoutSender, qrStep, renamedContacts, senderConfigured, senderReady } from './_sender.js'
 
@@ -20,8 +20,17 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   if (!isOwner(request)) return json({ ok: false, error: 'owner_only' }, 403)
+  const b = await readJson<{ phone?: string; code?: string; password?: string; resend?: boolean; qr?: boolean; wipe?: string }>(request)
+  // Owner only: remove every user's data (profiles, posts, matches, Safety mode). Not the sender account.
+  if (b?.wipe === 'ВИДАЛИТИ') {
+    const n = await wipeKeys([
+      'profile:*', 'mypost:*', 'post:*', 'posts:*', 'req:*', 'reqs:*', 'inbox:*', 'matches:*', 'meetings:*',
+      'notif:*', 'notifseen:*', 'tgphoto:*', 'area:*', 'subs:*', 'pings:*', 'checkin:*', 'outcome:*',
+      'trusted:*', 'safety:*', 'safetok:*', 'tinv:*', 'gidx:*', 'uname:*', 'login:*', 'outgoing:*', 'safety:active',
+    ])
+    return json({ ok: true, deleted: n })
+  }
   if (!senderConfigured) return json({ ok: false, error: 'no_api_id' }, 400)
-  const b = await readJson<{ phone?: string; code?: string; password?: string; resend?: boolean; qr?: boolean }>(request)
   try {
     if (b?.phone) {
       const phone = '+' + b.phone.replace(/\D/g, '')

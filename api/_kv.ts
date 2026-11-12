@@ -200,3 +200,17 @@ export function km(a: { lat: number; lon: number }, b: { lat: number; lon: numbe
   const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
   return 2 * R * Math.asin(Math.sqrt(h))
 }
+
+/** Delete every key matching the patterns (SCAN, not KEYS: doesn't block the database) */
+export async function wipeKeys(patterns: string[]): Promise<number> {
+  let n = 0
+  for (const match of patterns) {
+    let cursor = '0'
+    do {
+      const r = (await kv('SCAN', cursor, 'MATCH', match, 'COUNT', 500)) as [string, string[]]
+      cursor = r[0]
+      if (r[1].length) n += Number(await kv('DEL', ...r[1]))
+    } while (cursor !== '0')
+  }
+  return n
+}

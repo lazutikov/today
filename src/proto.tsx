@@ -425,9 +425,16 @@ function FeedApp({ onSignOut, onOnboarding }: { onSignOut: () => void; onOnboard
   useEffect(() => {
     if (!live) return
     refreshPosts()
-    fetchMe().then(({ profile: remote }) => {
+    fetchMe().then(({ ok, profile: remote }) => {
+      if (!ok) return // server unreachable: keep what this device has
       if (!remote) {
-        saveProfileRemote(loadProfile(), getSpotKey()) // first time on the server: upload what this device has
+        // No profile on the server (new, or the base was cleared): everyone goes through onboarding
+        try {
+          for (const k of ['today.trusted', 'today.safety', 'today.safetyPrefs', 'today.myPosts']) localStorage.removeItem(k)
+        } catch {
+          /* private mode */
+        }
+        onOnboarding()
         return
       }
       const next: Profile = { bio: remote.bio, areas: remote.areas, gender: remote.gender, age: remote.age, notify: remote.notify, places: remote.places, radius: remote.radius, interests: remote.interests, when: remote.when, company: remote.company }

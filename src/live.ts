@@ -21,9 +21,9 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 /** Saved profile (any device) plus an age hint from the Telegram birthday. */
-export async function fetchMe(): Promise<{ profile: (Profile & { updatedAt?: number }) | null; age: number | null }> {
+export async function fetchMe(): Promise<{ ok: boolean; profile: (Profile & { updatedAt?: number }) | null; age: number | null }> {
   const r = await api<{ ok: boolean; profile?: (Profile & { updatedAt?: number }) | null; age?: number | null }>('/api/me')
-  return r.ok ? { profile: r.profile ?? null, age: r.age ?? null } : { profile: null, age: null }
+  return r.ok ? { ok: true, profile: r.profile ?? null, age: r.age ?? null } : { ok: false, profile: null, age: null }
 }
 
 export async function saveProfileRemote(p: Profile, city: string) {

@@ -68,6 +68,15 @@
 
     <p id="err" class="err" hidden></p>
   </div>
+
+  <div class="card" id="wipeCard" style="margin-top:16px" hidden>
+    <h1 style="font-size:18px">Очистити базу користувачів</h1>
+    <p class="muted">Видалить профілі, пости, матчі, сповіщення, довірених людей і Safety mode в усіх. Акаунт для безпеки лишиться. Повернути не можна. Наступного входу кожен пройде онбординг.</p>
+    <label for="wipeConfirm">Щоб підтвердити, впиши ВИДАЛИТИ</label>
+    <input id="wipeConfirm" autocomplete="off" />
+    <button type="button" class="ghost" id="wipeBtn" style="color:#c22a17;border-color:#c22a17">Видалити всіх</button>
+    <p id="wipeResult" class="muted" hidden></p>
+  </div>
 </main>
 <script>
 (() => {
@@ -91,6 +100,7 @@
   async function load() {
     const r = await call('GET')
     if (!r.ok) { $('status').innerHTML = ''; $('qrStart').hidden = true; return err(ERR[r.error] || 'Помилка: ' + r.error) }
+    $('wipeCard').hidden = false
     if (!r.configured) { $('status').innerHTML = ''; $('qrStart').hidden = true; return err(ERR.no_api_id) }
     if (r.account) {
       $('status').innerHTML = `<p class="ok">Підключено${r.account.username ? ': @' + r.account.username : ''}${r.account.name ? ' (' + r.account.name + ')' : ''}</p>
@@ -191,6 +201,15 @@
     e.target.disabled = false
     if (r.ok) { $('qrBox').hidden = true; return load() }
     err(ERR[r.step] || ERR[r.error] || 'Помилка: ' + (r.step || r.error))
+  }
+
+  $('wipeBtn').onclick = async (e) => {
+    if ($('wipeConfirm').value.trim() !== 'ВИДАЛИТИ') return err('Впиши ВИДАЛИТИ великими літерами, щоб підтвердити.')
+    err(''); e.target.disabled = true
+    const r = await call('POST', { wipe: 'ВИДАЛИТИ' })
+    e.target.disabled = false
+    $('wipeResult').hidden = false
+    $('wipeResult').textContent = r.ok ? `Готово: видалено записів — ${r.deleted}. Онови сайт і зайди знову.` : 'Помилка: ' + r.error
   }
 
   load()
