@@ -42,6 +42,7 @@ export type Meeting = {
   address?: string
   time: string
   post: string
+  postId?: string
   source: 'invite' | 'event' | 'incoming'
   cancelled: boolean
   lat?: number

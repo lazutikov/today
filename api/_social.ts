@@ -603,6 +603,7 @@ export function meetingView(r: Req, viewerId: number) {
     lat: r.lat,
     lon: r.lon,
     post: r.postHeadline,
+    postId: r.postId,
     source: iAmAuthor ? 'incoming' : r.type === 'join' ? 'event' : 'invite',
     acceptedAt: r.createdAt,
     /** The other person called it off */

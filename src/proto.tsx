@@ -81,6 +81,8 @@ type Match = {
   cancelled?: boolean
   contact?: string
   photo?: string
+  /** The plan or post this match came from: hidden from the feed while the match stands */
+  cardId?: string
 }
 
 type Incoming = {
@@ -311,6 +313,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         cancelled: m.cancelled,
         lat: m.lat,
         lon: m.lon,
+        cardId: m.postId,
       }))
       // Server is the truth for real meetings; demo matches stay local.
       setMatches((cur) => [...real, ...cur.filter((x) => !x.reqId)])
@@ -453,6 +456,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
           address: st.match.address,
           time: st.match.time,
           source: card.kind === 'event' ? 'event' : 'invite',
+          cardId: card.id,
           contact: st.match.contact,
           photo: st.match.photo,
           lat: st.match.lat,
@@ -554,6 +558,7 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
         lon: card.lon,
         time: card.time,
         source: 'event',
+        cardId: card.id,
       })
     })
   }
@@ -693,10 +698,13 @@ function FeedApp({ onSignOut }: { onSignOut: () => void }) {
   }
   // Demo cards live in the launch city only; elsewhere the feed is just real people
   const local = (l: FeedCard[]) => (home ? l : l.filter((c) => c.mine))
+  // Plans I'm already in live in the banner on top, not in the feed
+  const joined = new Set(matches.filter((m) => !m.cancelled && m.cardId).map((m) => m.cardId))
+  const notJoined = (l: FeedCard[]) => l.filter((c) => c.mine || !joined.has(c.id))
   const cards = rankFeed(
     tab === 'people'
-      ? [...realPosts.filter((c) => c.kind === 'person'), ...local(people)]
-      : [...realPosts.filter((c) => c.kind === 'event'), ...local(events)],
+      ? notJoined([...realPosts.filter((c) => c.kind === 'person'), ...local(people)])
+      : notJoined([...realPosts.filter((c) => c.kind === 'event'), ...local(events)]),
     home ? (profile.areas ?? []) : [],
     new Date(),
     from,
