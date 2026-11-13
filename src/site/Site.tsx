@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
-import { CITY, CITY_NAME, EVENTS, PEOPLE, TAG_COLORS } from '../feed'
+import { CITY, EVENTS, PEOPLE, TAG_COLORS, type FeedCard } from '../feed'
 import { isSignedIn } from '../profile'
 import { loadSession, startBotLogin } from '../telegram'
 import { track } from '../track'
@@ -31,7 +31,7 @@ function goSignIn(e: MouseEvent<HTMLAnchorElement>, where: string) {
   location.href = `./app?login=${bot.code}${CITY === 'warsaw' ? '#warsaw' : ''}`
 }
 
-const PLACE = CITY === 'lviv' ? 'Проспект Свободи' : 'Plac Zbawiciela'
+const BRAND = 'come.along'
 
 /* ---------- Building blocks ---------- */
 
@@ -100,7 +100,7 @@ function InviteCard() {
       <p className="w-mini-kicker">Тебе запрошують</p>
       <p className="w-mini-title">Хочу на каву після роботи</p>
       <TagPill tag="Кава" />
-      <p className="w-mini-line">{PLACE}, сьогодні о 19:00</p>
+      <p className="w-mini-line">Кав’ярня в центрі, сьогодні о 19:00</p>
       <div className="w-mini-actions">
         <span className="w-mini-btn ghost">Ні</span>
         <span className="w-mini-btn">Так, 4:59</span>
@@ -152,7 +152,7 @@ const PERSONAS = [
     alt: 'Друзі вечеряють при свічках',
     tag: 'Бар/Ресторан',
     quote: '«Написав трьом — усі зайняті»',
-    text: 'Поруч завжди є хтось, хто теж вільний сьогодні ввечері.',
+    text: 'Поруч є люди, які теж вільні сьогодні. Глянь, хто вже щось планує.',
   },
 ]
 
@@ -171,30 +171,56 @@ const FINALLY = [
 const SAFETY = [
   { title: 'Тільки публічні місця', text: 'Кав’ярні, бари, парки, кінотеатри. Ніяких «приходь до мене».' },
   { title: 'Ім’я — після «Так»', text: 'У стрічці немає фото й імен. Вони відкриваються тому, з ким ти погодився.' },
-  { title: 'Скасування без пояснень', text: 'Дві хвилини після матчу — безкоштовно. «Мені некомфортно» — завжди.' },
+  { title: 'Скасування без пояснень', text: 'Дві хвилини після «Так» — безкоштовно. «Мені некомфортно» — завжди.' },
 ]
 
 const SAFETY_MODE = [
-  { time: '18:50', who: 'Каті:', text: 'Соня на зустрічі в Kredens Café з Андрієм. Ось де вона.' },
-  { time: '21:00', who: 'Тобі:', text: 'Все добре? — Так 👍' },
-  { time: 'тиша', who: 'Каті:', text: 'Соня не відповідає. Остання геопозиція — тут.', alarm: true },
+  { time: '18:50', who: 'Каті:', text: 'Соня на каві в Kredens Café, компанія з чотирьох. Ось де вона.' },
+  { time: '20:30', who: 'Тобі:', text: 'Все добре? — Так 👍' },
+  { time: '21:40', who: 'Каті:', text: 'Соня вже вдома. Підстраховка вимкнулась сама.' },
+]
+
+// Site-only demo cards: no city, and not only evenings
+const SITE_CARDS: FeedCard[] = [
+  {
+    ...PEOPLE[0],
+    headline: 'Вільний вечір. Хочу на пиво й поговорити про футбол чи IT. Хто з компанією?',
+    time: '18:00 - 21:00',
+    place: 'у центрі',
+    near: PEOPLE[0].near ? { ...PEOPLE[0].near, label: 'у центрі' } : undefined,
+  },
+  {
+    ...EVENTS[0],
+    headline: 'Граємо в більярд о 20:00. Нас двоє, шукаємо ще двох',
+    venue: 'Більярдний клуб',
+    venueAddress: undefined,
+    place: 'Центр',
+    areas: ['Центр'],
+  },
+  {
+    ...PEOPLE[2],
+    headline: 'Субота, вільна до 15:00. Хто на сніданок і прогулянку парком?',
+    time: '11:00 - 15:00',
+    place: 'біля парку',
+    near: PEOPLE[2].near ? { ...PEOPLE[2].near, label: 'біля парку' } : undefined,
+  },
 ]
 
 const FAQ = [
   {
-    q: 'Що таке Safety mode?',
-    a: 'Підстраховка на час зустрічі. Довірені люди знають, де ти, бот питає «Все добре?», а якщо ти не відповідаєш чи зникаєш зі зв’язку — надсилає їм твою останню геопозицію.',
+    q: 'Це тільки на вечір?',
+    a: 'Ні. Кава в обід, прогулянка в суботу вдень чи більярд увечері — коли в тебе є вільний час сьогодні.',
   },
   {
-    q: 'Хто бачить мою геопозицію?',
-    a: 'Лише люди, яких ти сам(а) додаєш у Safety mode, і лише під час зустрічі. Після неї посилання перестає працювати, а дані видаляються.',
+    q: 'Що таке Safety mode?',
+    a: 'Підстраховка на час зустрічі, яку ми зараз готуємо. Близькі знатимуть, де ти, бот спитає «Все добре?», а якщо ти не відповіси — надішле їм твою останню геопозицію. Геопозицію бачитимуть лише ті, кого ти обереш, і лише під час зустрічі.',
   },
   { q: 'Скільки це коштує?', a: 'На старті — безкоштовно. Спершу хочемо зрозуміти, чи це справді допомагає людям виходити з дому.' },
   { q: 'Чим це відрізняється від Tinder чи Bumble BFF?', a: 'Там шукають людину, тут — план на сьогодні. Без свайпів, фото в стрічці й багатоденних переписок.' },
   { q: 'Чому вхід через Telegram?', a: 'Без пароля і реєстрації. Запрошення приходять повідомленням у Telegram. Номер телефону ми не бачимо.' },
-  { q: 'Що інші бачать про мене?', a: 'Твій пост, рядок «про себе» і, якщо хочеш, стать і вік. Ім’я та фото — тільки після матчу.' },
-  { q: 'Де це працює?', a: `Запускаємось ${CITY === 'lviv' ? 'у Львові' : 'у Варшаві'} район за районом, щоб поруч завжди були люди.` },
-  { q: 'А якщо ніхто не відповість?', a: 'Чесно: на старті людей ще небагато. Тому відкриваємо райони по черзі й підкажемо, де зараз найбільше планів.' },
+  { q: 'Що інші бачать про мене?', a: 'Твій пост, рядок «про себе» і, якщо хочеш, стать і вік. Ім’я та фото — тільки після «Так».' },
+  { q: 'Де це працює?', a: 'Там, де ти. Стрічка показує плани поруч з тобою. Якщо поруч поки тихо — створи свій план, і його побачать інші.' },
+  { q: 'А якщо ніхто не відповість?', a: 'Чесно: на старті людей ще небагато. Тому підкажемо, де зараз найбільше планів, і ти завжди можеш створити свій.' },
 ]
 
 /* ---------- Page ---------- */
@@ -208,7 +234,7 @@ export default function Site() {
     <div className="w">
       <nav className="w-nav" aria-label="Навігація">
         <a className="w-logo" href="#top">
-          today
+          {BRAND}
         </a>
         <div className="w-nav-links">
           <a href="#how">Як це працює</a>
@@ -227,20 +253,23 @@ export default function Site() {
         <div className="w-hero-copy">
           <h1 className="w-hero-title">Компанія на сьогодні</h1>
           <p className="w-hero-lead">
-            Кава, кіно, боулінг чи прогулянка — з людьми поруч, уже ввечері. {CITY_NAME}.
+            Маєш вільний час, а друзі зайняті? Напиши, що хочеш — кава, більярд чи прогулянка, — і знайди,
+            з ким піти сьогодні.
           </p>
           <Cta where="hero" />
         </div>
-        {/* What Safety mode looks like for the trusted person: a glimpse, not a promise of rescue */}
-        <a className="w-hero-safe" href="#safety" aria-label="Safety mode: детальніше">
-          <span className="w-hero-safe-icon" aria-hidden="true">
-            <ShieldMark />
+        {/* What the app does in one glance: an invitation to someone's plan */}
+        <a className="w-hero-safe w-hero-inv" href="#how" aria-label="Як це працює">
+          <span className="w-hero-safe-icon w-hero-inv-icon" aria-hidden="true">
+            +
           </span>
           <span className="w-hero-safe-text">
-            <b>Safety mode увімкнено</b>
-            <span>Подруга знає, де ти, до 22:00</span>
+            <b>Тебе кличуть на більярд</b>
+            <span>Сьогодні о 20:00 · ще 2 місця</span>
           </span>
-          <span className="w-hero-safe-dot" aria-hidden="true" />
+          <span className="w-hero-inv-btn" aria-hidden="true">
+            Так
+          </span>
         </a>
       </header>
 
@@ -249,21 +278,21 @@ export default function Site() {
           id="intro-title"
           lines={[
             { text: 'менше чатів', tag: 'Ігри' },
-            { text: 'більше вечорів', tag: 'Кава' },
+            { text: 'більше планів', tag: 'Кава' },
           ]}
         />
         <div className="w-intro-text">
           <p className="w-text">
-            Пишеш, що хочеш сьогодні, і за кілька хвилин маєш план і людей поруч. Без анкет, свайпів
-            і тижневих переписок.
+            Пишеш, що хочеш сьогодні, — люди поруч відповідають «Так». Без анкет, свайпів і тижневих
+            переписок.
           </p>
           <a className="w-safe-note" href="#safety">
             <span className="w-safe-note-icon" aria-hidden="true">
               <ShieldMark />
             </span>
             <span>
-              <b>Ми робимо все, щоб тобі було спокійно.</b> Тільки публічні місця, ім’я — після «Так», а Safety
-              mode підстрахує під час самої зустрічі.
+              <b>Ми робимо все, щоб тобі було спокійно.</b> Тільки публічні місця, ім’я — після «Так», скасувати
+              можна без пояснень.
             </span>
           </a>
         </div>
@@ -325,7 +354,7 @@ export default function Site() {
         <Sticker
           id="finally-title"
           lines={[
-            { text: 'з today ти', tag: 'Прогулянка' },
+            { text: 'з come.along ти', tag: 'Прогулянка' },
             { text: 'нарешті…', tag: 'Ігри' },
           ]}
         />
@@ -356,9 +385,9 @@ export default function Site() {
       <section className="w-section w-feed" aria-labelledby="feed-title">
         <Sticker id="feed-title" plus={false} lines={[{ text: 'так виглядає стрічка', tag: 'Кава' }]} />
         <div className="w-feed-cards">
-          <CardView card={PEOPLE[0]} />
-          <CardView card={EVENTS[0]} />
-          <CardView card={PEOPLE[2]} />
+          {SITE_CARDS.map((c) => (
+            <CardView key={c.id} card={c} />
+          ))}
         </div>
       </section>
 
@@ -381,14 +410,14 @@ export default function Site() {
         <div className="w-sm">
           <div className="w-sm-copy">
             <span className="w-sm-badge">
-              <ShieldMark /> Safety mode
+              <ShieldMark /> Safety mode · скоро
             </span>
-            <h3 className="w-sm-title">Подруга знає, де ти, поки ти на зустрічі</h3>
-            <p className="w-sm-sub">Вмикається сам за 10 хвилин до зустрічі.</p>
+            <h3 className="w-sm-title">Близькі знатимуть, де ти, поки ти на зустрічі</h3>
+            <p className="w-sm-sub">Вмикатиметься сам за 10 хвилин до зустрічі й вимикатиметься, щойно ти вдома.</p>
           </div>
           <ol className="w-sm-feed" aria-label="Як це виглядає">
             {SAFETY_MODE.map((m) => (
-              <li key={m.time} className={m.alarm ? 'w-sm-msg alarm' : 'w-sm-msg'}>
+              <li key={m.time} className="w-sm-msg">
                 <span className="w-sm-time">{m.time}</span>
                 <span className="w-sm-text">
                   <b>{m.who}</b> {m.text}
@@ -396,7 +425,10 @@ export default function Site() {
               </li>
             ))}
           </ol>
-          <p className="w-sm-note">Геопозицію бачать лише твої довірені люди і лише під час зустрічі. У небезпеці — 112.</p>
+          <p className="w-sm-note">
+            Якщо ти не відповіси на «Все добре?», близькі отримають твою останню геопозицію. Бачать її лише ті, кого ти
+            обереш, і лише під час зустрічі. У небезпеці — 112.
+          </p>
         </div>
         <p className="w-promise">Це не дейтинг. Тут обирають не людей, а куди піти сьогодні.</p>
       </section>
@@ -432,7 +464,7 @@ export default function Site() {
       </section>
 
       <footer className="w-footer">
-        <span className="w-logo">today</span>
+        <span className="w-logo">{BRAND}</span>
         <span>
           Прототип, {new Date().getFullYear()}. Люди в прикладах вигадані. Фото: Unsplash (Vitaly
           Gariev, Aleksandra Sapozhnikova, Brittani Burns, Good Faces, Romain Gal, Toa Heftiba, Blend

@@ -1091,7 +1091,7 @@ html:has(.w) body {
 .w-sm-msg.alarm b { color: #ff8a73; }
 .w-sm-time { flex: none; min-width: 44px; font-size: 13px; font-weight: 700; color: #3ddc84; }
 .w-sm-msg.alarm .w-sm-time { color: #ff8a73; }
-.w-sm-note { margin: 0; font-size: 14px; line-height: 1.5; color: #8a8a8a; }
+.w-sm-note { margin: 0; font-size: 16px; line-height: 1.5; color: var(--soft); }
 @media (min-width: 900px) {
   .w-sm { padding: 44px; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
   .w-sm-note { grid-column: 1 / -1; }
@@ -1143,4 +1143,23 @@ html:has(.w) body {
 }
 @keyframes w-pulse {
   50% { box-shadow: 0 0 0 8px rgba(61, 220, 132, 0); }
+}
+
+/* Hero: an invitation chip instead of Safety mode (it is not public yet) */
+.w-hero-inv-icon {
+  background: var(--f-accent);
+  color: #000;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+.w-hero-inv-btn {
+  margin-left: auto;
+  flex: none;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
 }
